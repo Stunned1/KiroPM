@@ -21,6 +21,11 @@ export default function Account({ user }) {
           Sign out
         </button>
       </div>
+      <div className="feedback-section">
+        <h3>We value your feedback!</h3>
+        <p>Please take a moment to share your thoughts on our new color scheme and UI changes.</p>
+        <button className="feedback-button" onClick={() => alert('Feedback form coming soon!')}>Give Feedback</button>
+      </div>
     </div>
   )
 }
