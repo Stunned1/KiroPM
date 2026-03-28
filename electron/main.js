@@ -383,11 +383,11 @@ app.whenReady().then(() => {
         }
         if (name === 'read_google_sheet') {
           const { data: rows } = await supabaseAdmin(userId, 'google_sheets')
-          if (!rows?.[0]?.access_token) return 'Google Sheets not connected. Ask the user to connect it in their account settings.'
-          const apiKey = rows[0].access_token
+          if (!rows?.[0]?.access_token) return 'Google Sheets not connected. Ask the user to sign in with Google.'
+          const token = rows[0].access_token
           const range = args.range || 'A1:Z1000'
-          const url = `https://sheets.googleapis.com/v4/spreadsheets/${args.spreadsheet_id}/values/${encodeURIComponent(range)}?key=${apiKey}`
-          const res = await fetch(url)
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${args.spreadsheet_id}/values/${encodeURIComponent(range)}`
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
           if (!res.ok) {
             const err = await res.text()
             return `Google Sheets error: ${err}`
