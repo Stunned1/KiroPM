@@ -6,6 +6,7 @@ import Dashboard from './Dashboard'
 import ProjectTab from './ProjectTab'
 import Propose from './Propose'
 import TasksTab from './TasksTab'
+import ProjectDashboard from './ProjectDashboard'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -86,6 +87,8 @@ export default function App() {
           ? <Propose project={project} />
           : activeTab === 'tasks'
           ? <TasksTab />
+          : activeTab === 'dashboard'
+          ? <ProjectDashboard project={project} />
           : (
             <div className="placeholder">
               <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>
