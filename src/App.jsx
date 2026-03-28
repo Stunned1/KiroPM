@@ -6,18 +6,16 @@ import Dashboard from './Dashboard'
 import ProjectTab from './ProjectTab'
 import Propose from './Propose'
 import TasksTab from './TasksTab'
-import ProjectDashboard from './ProjectDashboard'
 import SettingsUI from './components/SettingsUI'
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard' },
   { id: 'propose', label: 'Propose' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'project', label: 'Project' },
 ]
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState('propose')
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
   const [boardTasks, setBoardTasks] = useState({ frontend: [], backend: [], qa: [] })
@@ -124,8 +122,6 @@ export default function App() {
           ? <Propose project={project} onSendTask={handleSendTask} proposeState={proposeState} onProposeStateChange={setProposeState} user={user} />
           : activeTab === 'tasks'
           ? <TasksTab boardTasks={boardTasks} setBoardTasks={setBoardTasks} project={project} />
-          : activeTab === 'dashboard'
-          ? <ProjectDashboard project={project} />
           : (
             <div className="placeholder">
               <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>
