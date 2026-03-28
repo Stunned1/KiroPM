@@ -340,7 +340,7 @@ app.whenReady().then(() => {
       },
     ]
 
-    function executeTool(name, args) {
+    async function executeTool(name, args) {
       try {
         if (name === 'read_file') {
           const filePath = path.isAbsolute(args.file_path)
@@ -384,17 +384,16 @@ app.whenReady().then(() => {
         if (name === 'read_google_sheet') {
           const { data: rows } = await supabaseAdmin(userId, 'google_sheets')
           if (!rows?.[0]?.access_token) return 'Google Sheets not connected. Ask the user to connect it in their account settings.'
-          const token = rows[0].access_token
-          const range = args.range || ''
-          const url = `https://sheets.googleapis.com/v4/spreadsheets/${args.spreadsheet_id}/values/${encodeURIComponent(range || 'A1:Z1000')}`
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+          const apiKey = rows[0].access_token
+          const range = args.range || 'A1:Z1000'
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${args.spreadsheet_id}/values/${encodeURIComponent(range)}?key=${apiKey}`
+          const res = await fetch(url)
           if (!res.ok) {
             const err = await res.text()
             return `Google Sheets error: ${err}`
           }
           const json = await res.json()
           const values = json.values || []
-          // Return as CSV-like text
           return values.slice(0, 200).map(row => row.join('\t')).join('\n') || 'Sheet is empty'
         }
         if (name === 'query_notion_database') {
@@ -487,7 +486,7 @@ ${csvContext || 'No CSV data loaded'}${fileContext ? `\n\nThe user has uploaded 
           try { fnArgs = JSON.parse(toolCall.function.arguments) } catch {}
           
           event.sender.send('chat-tool-call', { name: fnName, args: fnArgs })
-          const toolResult = executeTool(fnName, fnArgs)
+          const toolResult = await executeTool(fnName, fnArgs)
 
           messages.push({
             role: 'tool',

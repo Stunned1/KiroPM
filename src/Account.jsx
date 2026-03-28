@@ -21,6 +21,31 @@ function IntegrationRow({ icon, name, description, connected, onConnect, onDisco
   )
 }
 
+function GoogleSheetsModal({ onSave, onClose }) {
+  const [apiKey, setApiKey] = useState('')
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <h3 className="modal-title">Connect Google Sheets</h3>
+        <p className="modal-desc">
+          Create an API key at <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Google Cloud Console</a> with the Google Sheets API enabled, then paste it below. Make sure your sheets are shared with "Anyone with the link".
+        </p>
+        <input
+          className="modal-input"
+          placeholder="AIzaSy..."
+          value={apiKey}
+          onChange={e => setApiKey(e.target.value)}
+          autoFocus
+        />
+        <div className="modal-actions">
+          <button className="modal-btn modal-btn--cancel" onClick={onClose}>Cancel</button>
+          <button className="modal-btn modal-btn--save" onClick={() => onSave(apiKey)} disabled={!apiKey.trim()}>Save</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function NotionTokenModal({ onSave, onClose }) {
   const [token, setToken] = useState('')
   return (
@@ -55,6 +80,7 @@ export default function Account({ user }) {
   const [integrations, setIntegrations] = useState({})
   const [connecting, setConnecting] = useState(null)
   const [showNotionModal, setShowNotionModal] = useState(false)
+  const [showSheetsModal, setShowSheetsModal] = useState(false)
 
   useEffect(() => {
     loadIntegrations()
@@ -73,39 +99,29 @@ export default function Account({ user }) {
   }
 
   async function connectGoogleSheets() {
+    setShowSheetsModal(true)
+  }
+
+  async function saveGoogleSheetsKey(apiKey) {
+    setShowSheetsModal(false)
     setConnecting('google_sheets')
     try {
-      // Trigger Google OAuth via Supabase — opens browser
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
-          redirectTo: 'aipm://oauth',
-          queryParams: { access_type: 'offline', prompt: 'consent' },
-          skipBrowserRedirect: false,
-        },
-      })
-      if (error) throw error
-      // Token will be stored after OAuth callback — poll for it
-      const interval = setInterval(async () => {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.provider_token) {
-          clearInterval(interval)
-          await supabase.from('user_integrations').upsert({
-            user_id: user.id,
-            provider: 'google_sheets',
-            access_token: session.provider_token,
-            refresh_token: session.provider_refresh_token,
-            meta: { email: session.user?.email },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,provider' })
-          await loadIntegrations()
-          setConnecting(null)
-        }
-      }, 1000)
-      setTimeout(() => { clearInterval(interval); setConnecting(null) }, 60000)
+      // Quick validation — try fetching the discovery doc
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets?key=${apiKey}`)
+      // 400 means key works but no spreadsheet ID given — that's fine
+      if (res.status !== 400 && !res.ok && res.status !== 403) throw new Error('Invalid API key')
+      await supabase.from('user_integrations').upsert({
+        user_id: user.id,
+        provider: 'google_sheets',
+        access_token: apiKey,
+        meta: {},
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,provider' })
+      await loadIntegrations()
     } catch (err) {
       console.error('Google Sheets connect error:', err)
+      alert(err.message)
+    } finally {
       setConnecting(null)
     }
   }
@@ -182,6 +198,9 @@ export default function Account({ user }) {
 
       {showNotionModal && (
         <NotionTokenModal onSave={saveNotionToken} onClose={() => setShowNotionModal(false)} />
+      )}
+      {showSheetsModal && (
+        <GoogleSheetsModal onSave={saveGoogleSheetsKey} onClose={() => setShowSheetsModal(false)} />
       )}
     </div>
   )
