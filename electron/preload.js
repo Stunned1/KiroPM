@@ -49,3 +49,8 @@ contextBridge.exposeInMainWorld('electronAI', {
 contextBridge.exposeInMainWorld('electronProject', {
   getProjectUrl: (args) => ipcRenderer.invoke('get-project-url', args),
 })
+
+contextBridge.exposeInMainWorld('electronJira', {
+  getProjects: () => ipcRenderer.invoke('get-jira-projects'),
+  createTickets: (args) => ipcRenderer.invoke('create-jira-tickets', args),
+})

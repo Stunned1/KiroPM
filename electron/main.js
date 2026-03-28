@@ -7,6 +7,9 @@ require('dotenv').config({ path: path.join(__dirname, '../.env.local') })
 const isDev = process.env.NODE_ENV !== 'production'
 const PROTOCOL = 'aipm'
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const JIRA_URL = (process.env.JIRA_URL || '').replace(/\/+$/, '')
+const JIRA_EMAIL = process.env.JIRA_EMAIL
+const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -347,47 +350,112 @@ app.whenReady().then(() => {
   })
 
   // ── Generate feature code using OpenAI ────────────────────────────────────
+  function collectProjectFiles(projectPath, maxFiles = 15, maxChars = 4000) {
+    const result = []
+    const skip = ['node_modules', '.git', 'dist', '.next', 'build', '.vercel', 'coverage', '__pycache__']
+
+    function walk(dir, rel) {
+      if (result.length >= maxFiles) return
+      let entries
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+      // Prioritize key config files
+      const sorted = entries.sort((a, b) => {
+        const aKey = /\.(json|config\.|env)/.test(a.name) ? 0 : 1
+        const bKey = /\.(json|config\.|env)/.test(b.name) ? 0 : 1
+        return aKey - bKey || a.name.localeCompare(b.name)
+      })
+      for (const e of sorted) {
+        if (result.length >= maxFiles) return
+        if (skip.includes(e.name) || e.name.startsWith('.')) continue
+        const full = path.join(dir, e.name)
+        const relPath = rel ? `${rel}/${e.name}` : e.name
+        if (e.isDirectory()) {
+          walk(full, relPath)
+        } else if (/\.(jsx?|tsx?|css|html|json)$/.test(e.name)) {
+          try {
+            const content = fs.readFileSync(full, 'utf8').slice(0, maxChars)
+            result.push({ path: relPath, content })
+          } catch {}
+        }
+      }
+    }
+
+    walk(projectPath, '')
+    return result
+  }
+
+  function detectFramework(projectPath) {
+    try {
+      const pkgRaw = fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')
+      const pkg = JSON.parse(pkgRaw)
+      const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+      if (allDeps['next']) return 'nextjs'
+      if (allDeps['nuxt']) return 'nuxt'
+      if (allDeps['@angular/core']) return 'angular'
+      if (allDeps['svelte'] || allDeps['@sveltejs/kit']) return 'svelte'
+      if (allDeps['vite']) return 'vite-react'
+      if (allDeps['react']) return 'react'
+      if (allDeps['vue']) return 'vue'
+    } catch {}
+    return 'unknown'
+  }
+
   ipcMain.handle('generate-feature-code', async (event, { taskTitle, projectPath }) => {
     if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 
-    let codeContext = ''
-    if (projectPath) {
-      try {
-        const srcPath = path.join(projectPath, 'src')
-        if (fs.existsSync(srcPath)) {
-          const srcFiles = fs.readdirSync(srcPath, { recursive: true })
-            .filter(f => typeof f === 'string' && /\.(jsx?|tsx?|css|html)$/.test(f))
-            .slice(0, 8)
-          codeContext = srcFiles.map(f => {
-            try {
-              const content = fs.readFileSync(path.join(srcPath, f), 'utf8').slice(0, 3000)
-              return `\n--- src/${f} ---\n${content}`
-            } catch { return '' }
-          }).join('')
-        }
-        const pkgPath = path.join(projectPath, 'package.json')
-        if (fs.existsSync(pkgPath)) {
-          codeContext += `\n--- package.json ---\n${fs.readFileSync(pkgPath, 'utf8').slice(0, 2000)}`
-        }
-      } catch {}
+    const framework = detectFramework(projectPath)
+    const projectFiles = collectProjectFiles(projectPath)
+
+    const codeContext = projectFiles
+      .map(f => `\n--- ${f.path} ---\n${f.content}`)
+      .join('')
+
+    const frameworkRules = {
+      nextjs: `NEXT.JS RULES (CRITICAL — violating these WILL break the build):
+- Files in app/ directory are React Server Components by default. They CANNOT use hooks (useState, useEffect, useRef, etc.) or browser APIs.
+- To use hooks or interactivity, the file MUST start with "use client" as the very first line.
+- layout.tsx / layout.js files that export \`metadata\` MUST remain Server Components. NEVER add "use client" or hooks to them.
+- If a layout needs client-side behavior, extract it into a separate Client Component and import it.
+- page.tsx files can be Server or Client Components. Add "use client" only if they need hooks.
+- NEVER add useEffect, useState, or event handlers to a file that exports \`metadata\`.
+- When modifying an existing file, preserve its "use client" directive (or lack thereof).
+- Keep API routes in app/api/ as server-only.`,
+      react: `REACT RULES:
+- Hooks can only be used inside function components or custom hooks.
+- Preserve existing component structure and prop types.`,
+      'vite-react': `VITE + REACT RULES:
+- Hooks can only be used inside function components.
+- JSX files should use .jsx or .tsx extensions.`,
     }
+
+    const rules = frameworkRules[framework] || 'Preserve existing patterns and conventions.'
 
     const messages = [
       {
         role: 'system',
-        content: `You are an expert frontend developer. Given a feature request and existing codebase, generate the exact code changes needed to implement the feature.
+        content: `You are an expert frontend developer. Generate PRODUCTION-READY code changes for the given feature request.
 
-Respond with ONLY valid JSON (no markdown fences):
+FRAMEWORK DETECTED: ${framework}
+
+${rules}
+
+GENERAL RULES:
+- Output ONLY the complete file content for each modified file. Include ALL original code — do not omit or truncate.
+- Use the EXACT same file paths as the existing codebase.
+- NEVER modify layout files, config files, or metadata exports unless the feature specifically requires it.
+- Prefer creating new component files over modifying existing complex files.
+- Keep changes minimal and focused. Add the feature without breaking anything.
+- Ensure all imports are valid — only import modules that exist in the project or its dependencies.
+- If the feature requires a new dependency, list it in the dependencies array.
+
+Respond with ONLY valid JSON (no markdown fences, no explanation):
 {
   "files": {
-    "src/path/to/file.jsx": "full file content with the feature added",
-    "src/path/to/styles.css": "updated styles if needed"
+    "path/to/file.tsx": "complete file content"
   },
-  "summary": "Brief description of what was changed",
+  "summary": "Brief description of changes",
   "dependencies": []
-}
-
-IMPORTANT: Use the EXACT same file paths as the existing codebase. Keep changes minimal and focused. Modify existing files where possible. Preserve all existing functionality.`
+}`
       },
       {
         role: 'user',
@@ -441,6 +509,87 @@ IMPORTANT: Use the EXACT same file paths as the existing codebase. Keep changes 
     } catch (err) {
       return { success: false, error: err.message }
     }
+  })
+
+  // ── Jira integration ────────────────────────────────────────────────────────
+  ipcMain.handle('get-jira-projects', async () => {
+    if (!JIRA_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
+      return { success: false, error: 'Jira credentials not configured in .env.local' }
+    }
+    try {
+      const res = await fetch(`${JIRA_URL}/rest/api/3/project`, {
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`,
+          'Accept': 'application/json',
+        },
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        return { success: false, error: `Jira API ${res.status}: ${text}` }
+      }
+      const projects = await res.json()
+      return { success: true, projects: projects.map(p => ({ key: p.key, name: p.name, id: p.id })) }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle('create-jira-tickets', async (_event, { projectKey, issueType, tickets }) => {
+    if (!JIRA_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
+      return { success: false, error: 'Jira credentials not configured in .env.local' }
+    }
+    const authHeader = `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`
+    const results = []
+
+    for (const ticket of tickets) {
+      try {
+        const body = {
+          fields: {
+            project: { key: projectKey },
+            summary: ticket.title,
+            description: {
+              type: 'doc',
+              version: 1,
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: ticket.description || ticket.title }],
+                },
+              ],
+            },
+            issuetype: { name: issueType },
+          },
+        }
+
+        if (ticket.priority) {
+          const priorityMap = { high: 'High', medium: 'Medium', low: 'Low' }
+          body.fields.priority = { name: priorityMap[ticket.priority] || 'Medium' }
+        }
+
+        const res = await fetch(`${JIRA_URL}/rest/api/3/issue`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+
+        if (!res.ok) {
+          const errText = await res.text()
+          results.push({ id: ticket.id, success: false, error: `${res.status}: ${errText}` })
+        } else {
+          const data = await res.json()
+          results.push({ id: ticket.id, success: true, key: data.key, url: `${JIRA_URL}/browse/${data.key}` })
+        }
+      } catch (err) {
+        results.push({ id: ticket.id, success: false, error: err.message })
+      }
+    }
+
+    const allSuccess = results.every(r => r.success)
+    return { success: allSuccess, results }
   })
 
   // ── Generate proposal with OpenAI GPT-4o Mini ─────────────────────────────

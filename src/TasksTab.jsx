@@ -207,14 +207,64 @@ function Column({ col, tasks, selections, onToggle, activeTaskId, onPreview }) {
 function JiraModal({ tasks, onClose, onSubmit }) {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
-  const [project, setProject] = useState('MIRA')
+  const [project, setProject] = useState('')
+  const [projects, setProjects] = useState([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [type, setType] = useState('Story')
+  const [error, setError] = useState(null)
+  const [results, setResults] = useState([])
+
+  useEffect(() => {
+    if (!window.electronJira) {
+      setProjectsLoading(false)
+      setError('Jira integration not available')
+      return
+    }
+    window.electronJira.getProjects().then((res) => {
+      setProjectsLoading(false)
+      if (res.success && res.projects.length > 0) {
+        setProjects(res.projects)
+        setProject(res.projects[0].key)
+      } else {
+        setError(res.error || 'No Jira projects found')
+      }
+    }).catch((err) => {
+      setProjectsLoading(false)
+      setError(err.message)
+    })
+  }, [])
 
   async function handleCreate() {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1200))
+    setError(null)
+    try {
+      const res = await window.electronJira.createTickets({
+        projectKey: project,
+        issueType: type,
+        tickets: tasks.map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description || t.title,
+          priority: t.priority,
+        })),
+      })
+      if (res.success) {
+        setResults(res.results)
+        setDone(true)
+      } else {
+        const failed = res.results?.filter(r => !r.success) || []
+        if (failed.length > 0) {
+          setError(`${failed.length} ticket(s) failed: ${failed[0].error}`)
+          setResults(res.results)
+          setDone(true)
+        } else {
+          setError(res.error || 'Failed to create tickets')
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to create tickets')
+    }
     setLoading(false)
-    setDone(true)
   }
 
   return (
@@ -238,15 +288,52 @@ function JiraModal({ tasks, onClose, onSubmit }) {
               <circle cx="18" cy="18" r="18" fill="rgba(34,197,94,0.15)"/>
               <path d="M11 18l5 5 9-10" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <p>{tasks.length} ticket{tasks.length > 1 ? 's' : ''} created successfully</p>
+            <p className="modal-done-text">
+              {results.filter(r => r.success).length} of {tasks.length} ticket{tasks.length > 1 ? 's' : ''} created
+            </p>
+            <div className="modal-results-list">
+              {results.map((r) => (
+                <div key={r.id} className={`modal-result-row ${r.success ? 'modal-result--success' : 'modal-result--error'}`}>
+                  {r.success ? (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <circle cx="6" cy="6" r="6" fill="rgba(34,197,94,0.2)"/>
+                        <path d="M3.5 6l1.8 1.8 3.2-3.6" stroke="#22c55e" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <span className="modal-result-key">{r.key}</span>
+                      <span className="modal-result-title">{tasks.find(t => t.id === r.id)?.title}</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <circle cx="6" cy="6" r="6" fill="rgba(239,68,68,0.2)"/>
+                        <path d="M4 4l4 4M8 4l-4 4" stroke="#f87171" strokeWidth="1.2" strokeLinecap="round"/>
+                      </svg>
+                      <span className="modal-result-title">{tasks.find(t => t.id === r.id)?.title}</span>
+                      <span className="modal-result-error">{r.error}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
             <button className="tasks-btn-primary" onClick={onClose}>Done</button>
           </div>
         ) : (
           <>
             <div className="modal-fields">
               <div className="modal-field">
-                <label>Project key</label>
-                <input value={project} onChange={(e) => setProject(e.target.value)} />
+                <label>Project</label>
+                {projectsLoading ? (
+                  <div className="modal-field-loading">Loading projects...</div>
+                ) : projects.length > 0 ? (
+                  <select value={project} onChange={(e) => setProject(e.target.value)}>
+                    {projects.map(p => (
+                      <option key={p.key} value={p.key}>{p.name} ({p.key})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g. PROJ" />
+                )}
               </div>
               <div className="modal-field">
                 <label>Issue type</label>
@@ -269,10 +356,25 @@ function JiraModal({ tasks, onClose, onSubmit }) {
               ))}
             </div>
 
+            {error && (
+              <div className="modal-error">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="6" fill="rgba(239,68,68,0.2)"/>
+                  <path d="M6 3.5v3" stroke="#f87171" strokeWidth="1.2" strokeLinecap="round"/>
+                  <circle cx="6" cy="8.5" r="0.5" fill="#f87171"/>
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
             <div className="modal-footer">
               <button className="tasks-btn-outline" onClick={onClose}>Cancel</button>
-              <button className="tasks-btn-primary" onClick={handleCreate} disabled={loading}>
-                {loading ? 'Creating…' : `Create ${tasks.length} ticket${tasks.length > 1 ? 's' : ''}`}
+              <button
+                className="tasks-btn-primary"
+                onClick={handleCreate}
+                disabled={loading || !project}
+              >
+                {loading ? 'Creating...' : `Create ${tasks.length} ticket${tasks.length > 1 ? 's' : ''}`}
               </button>
             </div>
           </>
