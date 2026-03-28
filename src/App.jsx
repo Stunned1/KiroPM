@@ -7,6 +7,7 @@ import ProjectTab from './ProjectTab'
 import Propose from './Propose'
 import TasksTab from './TasksTab'
 import ProjectDashboard from './ProjectDashboard'
+import SettingsUI from './components/SettingsUI'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -110,7 +111,7 @@ export default function App() {
         {activeTab === 'account'
           ? <Account user={user} />
           : activeTab === 'settings'
-          ? <div className="placeholder"><h2>Settings</h2><p>Settings coming soon.</p></div>
+          ? <SettingsUI />
           : activeTab === 'project'
           ? <ProjectTab project={project} />
           : activeTab === 'propose'
