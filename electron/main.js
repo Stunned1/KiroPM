@@ -1,5 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
 const path = require('path')
+const { execFile } = require('child_process')
+const fs = require('fs')
 
 const isDev = process.env.NODE_ENV !== 'production'
 const PROTOCOL = 'aipm'
@@ -49,6 +51,27 @@ app.whenReady().then(() => {
       properties: ['openDirectory'],
     })
     return canceled ? null : filePaths[0]
+  })
+
+  ipcMain.handle('git-clone', async (_event, { url, destDir }) => {
+    return new Promise((resolve, reject) => {
+      execFile('git', ['clone', url], { cwd: destDir }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message))
+        else resolve()
+      })
+    })
+  })
+
+  ipcMain.handle('read-directory', async (_event, dirPath) => {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    return entries.map((e) => ({
+      name: e.name,
+      isDirectory: e.isDirectory(),
+      path: path.join(dirPath, e.name),
+    })).sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
   })
 })
 

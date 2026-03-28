@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import Auth from './Auth'
 import Account from './Account'
 import Dashboard from './Dashboard'
+import FileBrowser from './FileBrowser'
 
 const NAV_ITEMS = [
   { id: 'signals', label: 'Signals' },
@@ -63,6 +64,8 @@ export default function App() {
           </button>
         </div>
       </aside>
+
+      <FileBrowser project={project} />
 
       <main className="content">
         {activeTab === 'account'
