@@ -49,6 +49,8 @@ const MOCK_TASKS = {
   ],
 }
 
+const ALL_TASKS = Object.values(MOCK_TASKS).flat()
+
 const COLUMNS = [
   { id: 'frontend', label: 'Frontend', color: '#7c6af7' },
   { id: 'backend', label: 'Backend', color: '#f59e0b' },
@@ -56,11 +58,11 @@ const COLUMNS = [
 ]
 
 const CATEGORY_COLORS = {
-  'UI/UX':        { bg: 'rgba(124,106,247,0.15)', color: '#a78bfa' },
-  'INTEGRATION':  { bg: 'rgba(59,130,246,0.15)',  color: '#60a5fa' },
-  'SECURITY':     { bg: 'rgba(248,113,113,0.15)', color: '#f87171' },
-  'CORE API':     { bg: 'rgba(16,185,129,0.15)',  color: '#34d399' },
-  'END-TO-END':   { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24' },
+  'UI/UX':       { bg: 'rgba(124,106,247,0.15)', color: '#a78bfa' },
+  'INTEGRATION': { bg: 'rgba(59,130,246,0.15)',  color: '#60a5fa' },
+  'SECURITY':    { bg: 'rgba(248,113,113,0.15)', color: '#f87171' },
+  'CORE API':    { bg: 'rgba(16,185,129,0.15)',  color: '#34d399' },
+  'END-TO-END':  { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24' },
 }
 
 function Avatar({ initials }) {
@@ -77,11 +79,32 @@ function Avatar({ initials }) {
   )
 }
 
-function TaskCard({ task }) {
+function TaskCard({ task, selectionState, onToggle }) {
   const catStyle = CATEGORY_COLORS[task.category] || { bg: 'rgba(255,255,255,0.08)', color: '#aaa' }
+  const isApproved = selectionState === 'approved'
+  const isRejected = selectionState === 'rejected'
 
   return (
-    <div className="task-card">
+    <div
+      className={`task-card ${isApproved ? 'task-card--approved' : ''} ${isRejected ? 'task-card--rejected' : ''}`}
+      onClick={() => onToggle(task.id)}
+    >
+      {/* Selection indicator */}
+      <div className="task-card-select">
+        <div className={`task-checkbox ${isApproved ? 'task-checkbox--approved' : ''} ${isRejected ? 'task-checkbox--rejected' : ''}`}>
+          {isApproved && (
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+          {isRejected && (
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M3 3l4 4M7 3l-4 4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          )}
+        </div>
+      </div>
+
       <div className="task-card-header">
         <span className="task-category" style={{ background: catStyle.bg, color: catStyle.color }}>
           {task.category}
@@ -149,11 +172,29 @@ function TaskCard({ task }) {
           </div>
         </div>
       )}
+
+      {/* Approve / Reject quick actions — shown on hover via CSS */}
+      <div className="task-card-actions" onClick={(e) => e.stopPropagation()}>
+        <button
+          className={`task-action-btn task-action-approve ${isApproved ? 'active' : ''}`}
+          onClick={() => onToggle(task.id, 'approved')}
+          title="Approve"
+        >
+          ✓
+        </button>
+        <button
+          className={`task-action-btn task-action-reject ${isRejected ? 'active' : ''}`}
+          onClick={() => onToggle(task.id, 'rejected')}
+          title="Reject"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   )
 }
 
-function Column({ col, tasks }) {
+function Column({ col, tasks, selections, onToggle }) {
   return (
     <div className="tasks-column">
       <div className="tasks-col-header">
@@ -168,7 +209,95 @@ function Column({ col, tasks }) {
         </div>
       </div>
       <div className="tasks-col-cards">
-        {tasks.map((task) => <TaskCard key={task.id} task={task} />)}
+        {tasks.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            selectionState={selections[task.id] || null}
+            onToggle={onToggle}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Jira ticket creation modal
+function JiraModal({ tasks, onClose, onSubmit }) {
+  const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [project, setProject] = useState('MIRA')
+  const [type, setType] = useState('Story')
+
+  async function handleCreate() {
+    setLoading(true)
+    // TODO: replace with real Jira API / MCP call
+    await new Promise((r) => setTimeout(r, 1200))
+    setLoading(false)
+    setDone(true)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title-row">
+            {/* Jira-ish icon */}
+            <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="6" fill="#0052CC"/>
+              <path d="M16.5 7l-9 9 4.5 4.5 4.5-4.5 4.5 4.5 4.5-4.5-9-9z" fill="#fff"/>
+              <path d="M12 16.5l4.5 4.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" fill="none"/>
+            </svg>
+            <span className="modal-title">Create Jira Tickets</span>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {done ? (
+          <div className="modal-done">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <circle cx="18" cy="18" r="18" fill="rgba(34,197,94,0.15)"/>
+              <path d="M11 18l5 5 9-10" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <p>{tasks.length} ticket{tasks.length > 1 ? 's' : ''} created successfully</p>
+            <button className="tasks-btn-primary" onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <>
+            <div className="modal-fields">
+              <div className="modal-field">
+                <label>Project key</label>
+                <input value={project} onChange={(e) => setProject(e.target.value)} />
+              </div>
+              <div className="modal-field">
+                <label>Issue type</label>
+                <select value={type} onChange={(e) => setType(e.target.value)}>
+                  <option>Story</option>
+                  <option>Task</option>
+                  <option>Bug</option>
+                  <option>Epic</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="modal-task-list">
+              <p className="modal-section-label">Tickets to create ({tasks.length})</p>
+              {tasks.map((t) => (
+                <div key={t.id} className="modal-task-row">
+                  <span className="modal-task-id">{t.id}</span>
+                  <span className="modal-task-title">{t.title}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-footer">
+              <button className="tasks-btn-outline" onClick={onClose}>Cancel</button>
+              <button className="tasks-btn-primary" onClick={handleCreate} disabled={loading}>
+                {loading ? 'Creating…' : `Create ${tasks.length} ticket${tasks.length > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -176,6 +305,32 @@ function Column({ col, tasks }) {
 
 export default function TasksTab() {
   const [tasks] = useState(MOCK_TASKS)
+  // selections: { [taskId]: 'approved' | 'rejected' }
+  const [selections, setSelections] = useState({})
+  const [showJira, setShowJira] = useState(false)
+
+  function handleToggle(taskId, forceState) {
+    setSelections((prev) => {
+      const current = prev[taskId]
+      if (forceState) {
+        // clicking approve/reject buttons directly
+        return { ...prev, [taskId]: current === forceState ? null : forceState }
+      }
+      // clicking the card body cycles: null → approved → rejected → null
+      const next = current === null || !current ? 'approved'
+        : current === 'approved' ? 'rejected'
+        : null
+      return { ...prev, [taskId]: next }
+    })
+  }
+
+  function clearAll() {
+    setSelections({})
+  }
+
+  const approvedTasks = ALL_TASKS.filter((t) => selections[t.id] === 'approved')
+  const rejectedTasks = ALL_TASKS.filter((t) => selections[t.id] === 'rejected')
+  const anySelected = approvedTasks.length > 0 || rejectedTasks.length > 0
 
   return (
     <div className="tasks-page">
@@ -185,26 +340,68 @@ export default function TasksTab() {
           <p className="tasks-subheading">Sprint 24: Core Infrastructure Migration</p>
         </div>
         <div className="tasks-actions">
-          <button className="tasks-btn-outline">
-            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
-            </svg>
-            Create Branch
+          <button className="tasks-btn-outline" onClick={clearAll} disabled={!anySelected}>
+            Clear selection
           </button>
-          <button className="tasks-btn-primary">
-            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+          <button
+            className="tasks-btn-primary"
+            disabled={approvedTasks.length === 0}
+            onClick={() => setShowJira(true)}
+          >
+            {/* Jira icon */}
+            <svg width="13" height="13" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="4" fill="rgba(255,255,255,0.2)"/>
+              <path d="M16.5 7l-9 9 4.5 4.5 4.5-4.5 4.5 4.5 4.5-4.5-9-9z" fill="#fff"/>
             </svg>
-            Push to Repo
+            Create Jira Ticket{approvedTasks.length > 1 ? 's' : ''}
+            {approvedTasks.length > 0 && (
+              <span className="tasks-btn-badge">{approvedTasks.length}</span>
+            )}
           </button>
         </div>
       </div>
 
+      {/* Selection summary bar */}
+      {anySelected && (
+        <div className="tasks-selection-bar">
+          {approvedTasks.length > 0 && (
+            <span className="tasks-sel-approved">
+              <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+                <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {approvedTasks.length} approved
+            </span>
+          )}
+          {rejectedTasks.length > 0 && (
+            <span className="tasks-sel-rejected">
+              <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+                <path d="M3 3l4 4M7 3l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {rejectedTasks.length} rejected
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="tasks-board">
         {COLUMNS.map((col) => (
-          <Column key={col.id} col={col} tasks={tasks[col.id] || []} />
+          <Column
+            key={col.id}
+            col={col}
+            tasks={tasks[col.id] || []}
+            selections={selections}
+            onToggle={handleToggle}
+          />
         ))}
       </div>
+
+      {showJira && (
+        <JiraModal
+          tasks={approvedTasks}
+          onClose={() => setShowJira(false)}
+          onSubmit={() => setShowJira(false)}
+        />
+      )}
     </div>
   )
 }
