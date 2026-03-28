@@ -103,3 +103,111 @@ nav {
   font-weight: 500;
   color: var(--text);
 }
+
+/* Auth */
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #0f0f0f;
+}
+
+.auth-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 320px;
+  padding: 32px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+}
+
+.auth-box .logo {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.auth-box h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #aaa;
+  font-weight: 400;
+}
+
+.auth-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-box input {
+  padding: 10px 12px;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.auth-box input:focus {
+  border-color: #555;
+}
+
+.auth-box button[type='submit'] {
+  padding: 10px;
+  background: #fff;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.auth-box button[type='submit']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-toggle {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.auth-toggle:hover {
+  color: #aaa;
+}
+
+.auth-error {
+  color: #f87171;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.auth-message {
+  color: #4ade80;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.signout-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.signout-btn:hover {
+  color: #aaa;
+}

@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { supabase } from './supabase'
+import Auth from './Auth'
 
 const NAV_ITEMS = [
   { id: 'signals', label: 'Signals' },
@@ -10,12 +12,24 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('signals')
+  const [session, setSession] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (!session) return <Auth />
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
           <span className="logo">◈ AI PM</span>
+          <button className="signout-btn" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
         <nav>
           {NAV_ITEMS.map((item) => (
