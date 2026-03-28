@@ -512,7 +512,7 @@ ${csvContext || 'No CSV data loaded'}${fileContext ? `\n\nThe user has uploaded 
   })
 
   // ── Generate proposal with OpenAI GPT-4o Mini ─────────────────────────────
-  ipcMain.handle('generate-proposal', async (event, { prompt, files, projectPath }) => {
+  ipcMain.handle('generate-proposal', async (event, { prompt, files, projectPath, userId }) => {
     if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 
     // Load CSV context from project
@@ -522,19 +522,36 @@ ${csvContext || 'No CSV data loaded'}${fileContext ? `\n\nThe user has uploaded 
     let fileContext = ''
     const imageFiles = []
     if (files?.length) {
-      const textFiles = files.filter(f => !f.imageData)
+      const textFiles = files.filter(f => !f.imageData && !f.sheetId)
+      const sheetFiles = files.filter(f => f.sheetId)
       imageFiles.push(...files.filter(f => f.imageData))
+
       if (textFiles.length) {
         fileContext = '\n\n## UPLOADED CONTEXT FILES\n'
         fileContext += textFiles.map(f => {
           const content = f.content || '[empty or unreadable]'
           return `\n--- ${f.name} ---\n${content.slice(0, 8000)}`
         }).join('')
-        console.log(`[generate-proposal] Injecting ${textFiles.length} text file(s):`, textFiles.map(f => f.name))
       }
-      if (imageFiles.length) {
-        console.log(`[generate-proposal] Injecting ${imageFiles.length} image(s):`, imageFiles.map(f => f.name))
+
+      // Fetch Google Sheet data
+      for (const sf of sheetFiles) {
+        try {
+          const sheetData = await supabaseAdmin(userId, 'google_sheets')
+          const token = sheetData?.data?.[0]?.access_token
+          if (token) {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${sf.sheetId}/values/A1:Z1000`
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+            if (res.ok) {
+              const json = await res.json()
+              const rows = (json.values || []).slice(0, 200).map(r => r.join('\t')).join('\n')
+              fileContext += `\n\n--- ${sf.name} ---\n${rows}`
+            }
+          }
+        } catch {}
       }
+
+      console.log(`[generate-proposal] Injecting ${textFiles.length} text file(s), ${sheetFiles.length} sheet(s), ${imageFiles.length} image(s)`)
     }
 
     // Sample codebase for context

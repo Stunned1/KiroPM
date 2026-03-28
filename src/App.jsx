@@ -24,7 +24,20 @@ export default function App() {
   const [proposeState, setProposeState] = useState({ stage: 'idle', proposal: null, submittedPrompt: '', streamText: '', chatMessages: [], chatInitialized: false, uploadedFiles: [] })
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      // If signed in with Google, persist provider token for Sheets
+      if (session?.provider_token && session?.user?.app_metadata?.provider === 'google') {
+        supabase.from('user_integrations').upsert({
+          user_id: session.user.id,
+          provider: 'google_sheets',
+          access_token: session.provider_token,
+          refresh_token: session.provider_refresh_token || null,
+          meta: { email: session.user.email },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,provider' })
+      }
+    })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })

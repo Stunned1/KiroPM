@@ -1341,6 +1341,28 @@ nav {
   min-height: 60px;
   line-height: 1.5;
 }
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+.sheet-url-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 11px;
+  width: 180px;
+}
+.source-sheet-input button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
 
 /* UI changes */
 .changes-list { display: flex; flex-direction: column; gap: 8px; }
@@ -2657,4 +2679,28 @@ nav {
 
 .db-trends-updated {
   color: #444;
+}
+
+.source-sheet-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+.sheet-url-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 11px;
+  width: 180px;
+}
+.source-sheet-input button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
 }
