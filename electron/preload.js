@@ -36,4 +36,16 @@ contextBridge.exposeInMainWorld('electronAI', {
     ipcRenderer.removeAllListeners('chat-tool-call')
     ipcRenderer.removeAllListeners('proposal-patch')
   },
+  generateFeatureCode: (args) => ipcRenderer.invoke('generate-feature-code', args),
+  onFeatureCodeChunk: (cb) => ipcRenderer.on('feature-code-chunk', (_e, chunk) => cb(chunk)),
+  onFeatureCodeDone: (cb) => ipcRenderer.once('feature-code-done', (_e, full) => cb(full)),
+  removeFeatureCodeListeners: () => {
+    ipcRenderer.removeAllListeners('feature-code-chunk')
+    ipcRenderer.removeAllListeners('feature-code-done')
+  },
+  applyFeatureFiles: (args) => ipcRenderer.invoke('apply-feature-files', args),
+})
+
+contextBridge.exposeInMainWorld('electronProject', {
+  getProjectUrl: (args) => ipcRenderer.invoke('get-project-url', args),
 })

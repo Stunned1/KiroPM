@@ -15,8 +15,12 @@ export default function Auth() {
         const hashParams = new URLSearchParams(url.split('#')[1])
         const accessToken = hashParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token')
+        const providerToken = hashParams.get('provider_token')
         if (accessToken) {
           await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          if (providerToken) {
+            localStorage.setItem('github_provider_token', providerToken)
+          }
         }
       })
       return () => window.electronAuth.removeOAuthCallback()
@@ -40,7 +44,11 @@ export default function Auth() {
     setError(null)
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
-      options: { redirectTo: 'aipm://auth/callback' },
+      options: { 
+        redirectTo: 'aipm://auth/callback',
+        skipBrowserRedirect: true,
+        scopes: 'repo',
+      },
     })
     if (error) setError(error.message)
     else if (data?.url) window.open(data.url, '_blank')

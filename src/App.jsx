@@ -117,7 +117,7 @@ export default function App() {
           : activeTab === 'propose'
           ? <Propose project={project} onSendTask={handleSendTask} proposeState={proposeState} onProposeStateChange={setProposeState} user={user} />
           : activeTab === 'tasks'
-          ? <TasksTab boardTasks={boardTasks} setBoardTasks={setBoardTasks} />
+          ? <TasksTab boardTasks={boardTasks} setBoardTasks={setBoardTasks} project={project} />
           : activeTab === 'dashboard'
           ? <ProjectDashboard project={project} />
           : (

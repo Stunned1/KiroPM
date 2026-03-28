@@ -26,6 +26,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   })
@@ -293,7 +294,156 @@ app.whenReady().then(() => {
     return fullText
   })
 
-  // ── Generate proposal ───────────────────────────────────────────────────────
+  // ── Extract hosted URL from project README ─────────────────────────────────
+  ipcMain.handle('get-project-url', async (_event, { projectPath }) => {
+    try {
+      const readmeNames = ['README.md', 'readme.md', 'Readme.md', 'README.MD', 'README']
+      let readmeContent = null
+
+      for (const name of readmeNames) {
+        const readmePath = path.join(projectPath, name)
+        if (fs.existsSync(readmePath)) {
+          readmeContent = fs.readFileSync(readmePath, 'utf8')
+          break
+        }
+      }
+
+      if (!readmeContent) return { url: null, error: 'No README found' }
+
+      const urlRegex = /https?:\/\/[^\s)>\]"'`]+/g
+      const allUrls = readmeContent.match(urlRegex) || []
+
+      const hostedPatterns = [
+        /vercel\.app/,
+        /netlify\.app/,
+        /herokuapp\.com/,
+        /surge\.sh/,
+        /github\.io/,
+        /railway\.app/,
+        /render\.com/,
+        /fly\.dev/,
+        /cloudflare\.pages/,
+        /amplifyapp\.com/,
+      ]
+
+      let hostedUrl = allUrls.find(u =>
+        hostedPatterns.some(p => p.test(u))
+      )
+
+      if (!hostedUrl) {
+        hostedUrl = allUrls.find(u =>
+          !u.includes('github.com') &&
+          !u.includes('npmjs.com') &&
+          !u.includes('shields.io') &&
+          !u.includes('img.shields') &&
+          !u.includes('badge')
+        )
+      }
+
+      return { url: hostedUrl || null }
+    } catch (err) {
+      return { url: null, error: err.message }
+    }
+  })
+
+  // ── Generate feature code using OpenAI ────────────────────────────────────
+  ipcMain.handle('generate-feature-code', async (event, { taskTitle, projectPath }) => {
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
+
+    let codeContext = ''
+    if (projectPath) {
+      try {
+        const srcPath = path.join(projectPath, 'src')
+        if (fs.existsSync(srcPath)) {
+          const srcFiles = fs.readdirSync(srcPath, { recursive: true })
+            .filter(f => typeof f === 'string' && /\.(jsx?|tsx?|css|html)$/.test(f))
+            .slice(0, 8)
+          codeContext = srcFiles.map(f => {
+            try {
+              const content = fs.readFileSync(path.join(srcPath, f), 'utf8').slice(0, 3000)
+              return `\n--- src/${f} ---\n${content}`
+            } catch { return '' }
+          }).join('')
+        }
+        const pkgPath = path.join(projectPath, 'package.json')
+        if (fs.existsSync(pkgPath)) {
+          codeContext += `\n--- package.json ---\n${fs.readFileSync(pkgPath, 'utf8').slice(0, 2000)}`
+        }
+      } catch {}
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an expert frontend developer. Given a feature request and existing codebase, generate the exact code changes needed to implement the feature.
+
+Respond with ONLY valid JSON (no markdown fences):
+{
+  "files": {
+    "src/path/to/file.jsx": "full file content with the feature added",
+    "src/path/to/styles.css": "updated styles if needed"
+  },
+  "summary": "Brief description of what was changed",
+  "dependencies": []
+}
+
+IMPORTANT: Use the EXACT same file paths as the existing codebase. Keep changes minimal and focused. Modify existing files where possible. Preserve all existing functionality.`
+      },
+      {
+        role: 'user',
+        content: `Feature to implement: ${taskTitle}\n\nExisting codebase:\n${codeContext}`
+      }
+    ]
+
+    const fullText = await streamOpenAI(event, messages, 'feature-code-chunk')
+    event.sender.send('feature-code-done', fullText)
+    return fullText
+  })
+
+  // ── Apply feature: write files, commit, and push ───────────────────────────
+  ipcMain.handle('apply-feature-files', async (_event, { projectPath, files, featureId, commitMessage }) => {
+    const { execFileSync } = require('child_process')
+
+    try {
+      for (const [relPath, content] of Object.entries(files)) {
+        const fullPath = path.join(projectPath, relPath)
+        const dir = path.dirname(fullPath)
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(fullPath, content, 'utf8')
+      }
+
+      let gitResult = { committed: false, pushed: false }
+      try {
+        execFileSync('git', ['rev-parse', '--git-dir'], { cwd: projectPath, encoding: 'utf8' })
+
+        const filePaths = Object.keys(files)
+        execFileSync('git', ['add', ...filePaths], { cwd: projectPath, encoding: 'utf8' })
+
+        const msg = commitMessage || `feat: ${featureId} — AI-generated feature`
+        execFileSync('git', ['commit', '-m', msg], { cwd: projectPath, encoding: 'utf8' })
+        gitResult.committed = true
+
+        try {
+          execFileSync('git', ['push'], { cwd: projectPath, encoding: 'utf8', timeout: 30000 })
+          gitResult.pushed = true
+        } catch (pushErr) {
+          gitResult.pushError = pushErr.message
+        }
+      } catch (gitErr) {
+        gitResult.gitError = gitErr.message
+      }
+
+      return {
+        success: true,
+        filesWritten: Object.keys(files).length,
+        ...gitResult,
+      }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── Generate proposal with OpenAI GPT-4o Mini ─────────────────────────────
   ipcMain.handle('generate-proposal', async (event, { prompt, files, projectPath }) => {
     if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 

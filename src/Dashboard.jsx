@@ -41,8 +41,8 @@ export default function Dashboard({ user, onOpenProject }) {
     setReposError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.provider_token
-      if (!token) throw new Error('No GitHub token found. Please sign in with GitHub.')
+      const token = session?.provider_token || localStorage.getItem('github_provider_token')
+      if (!token) throw new Error('No GitHub token found. Please sign out and sign in again with GitHub.')
       const res = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
         headers: { Authorization: `Bearer ${token}` },
       })

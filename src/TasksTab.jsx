@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const COLUMNS = [
   { id: 'frontend', label: 'Frontend', color: '#7c6af7' },
@@ -31,17 +31,16 @@ function Avatar({ initials }) {
   )
 }
 
-function TaskCard({ task, selectionState, onToggle }) {
-  const catStyle = CATEGORY_COLORS[task.category] || { bg: 'rgba(255,255,255,0.08)', color: '#aaa' }
+function TaskCard({ task, selectionState, onToggle, isActive, onPreview }) {
+  const catStyle = CATEGORY_COLORS[task.category] || { bg: 'var(--border)', color: 'var(--text-muted)' }
   const isApproved = selectionState === 'approved'
   const isRejected = selectionState === 'rejected'
 
   return (
     <div
-      className={`task-card ${isApproved ? 'task-card--approved' : ''} ${isRejected ? 'task-card--rejected' : ''}`}
+      className={`task-card ${isApproved ? 'task-card--approved' : ''} ${isRejected ? 'task-card--rejected' : ''} ${isActive ? 'task-card--active' : ''}`}
       onClick={() => onToggle(task.id)}
     >
-      {/* Selection indicator */}
       <div className="task-card-select">
         <div className={`task-checkbox ${isApproved ? 'task-checkbox--approved' : ''} ${isRejected ? 'task-checkbox--rejected' : ''}`}>
           {isApproved && (
@@ -134,7 +133,21 @@ function TaskCard({ task, selectionState, onToggle }) {
         </div>
       )}
 
-      {/* Approve / Reject quick actions — shown on hover via CSS */}
+      {/* Preview button for proposal tasks */}
+      {task.fromProposal && (
+        <button
+          className="task-preview-btn"
+          onClick={(e) => { e.stopPropagation(); onPreview(task) }}
+          title="Preview this feature"
+        >
+          <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+          </svg>
+          Preview Feature
+        </button>
+      )}
+
       <div className="task-card-actions" onClick={(e) => e.stopPropagation()}>
         <button
           className={`task-action-btn task-action-approve ${isApproved ? 'active' : ''}`}
@@ -155,7 +168,7 @@ function TaskCard({ task, selectionState, onToggle }) {
   )
 }
 
-function Column({ col, tasks, selections, onToggle }) {
+function Column({ col, tasks, selections, onToggle, activeTaskId, onPreview }) {
   return (
     <div className="tasks-column">
       <div className="tasks-col-header">
@@ -176,6 +189,8 @@ function Column({ col, tasks, selections, onToggle }) {
             task={task}
             selectionState={selections[task.id] || null}
             onToggle={onToggle}
+            isActive={task.id === activeTaskId}
+            onPreview={onPreview}
           />
         ))}
         {tasks.length === 0 && (
@@ -189,7 +204,6 @@ function Column({ col, tasks, selections, onToggle }) {
   )
 }
 
-// Jira ticket creation modal
 function JiraModal({ tasks, onClose, onSubmit }) {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -198,7 +212,6 @@ function JiraModal({ tasks, onClose, onSubmit }) {
 
   async function handleCreate() {
     setLoading(true)
-    // TODO: replace with real Jira API / MCP call
     await new Promise((r) => setTimeout(r, 1200))
     setLoading(false)
     setDone(true)
@@ -209,7 +222,6 @@ function JiraModal({ tasks, onClose, onSubmit }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-row">
-            {/* Jira-ish icon */}
             <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" fill="#0052CC"/>
               <path d="M16.5 7l-9 9 4.5 4.5 4.5-4.5 4.5 4.5 4.5-4.5-9-9z" fill="#fff"/>
@@ -270,21 +282,281 @@ function JiraModal({ tasks, onClose, onSubmit }) {
   )
 }
 
-export default function TasksTab({ boardTasks, setBoardTasks }) {
-  // selections: { [taskId]: 'approved' | 'rejected' }
+function PreviewPanel({ appUrl, previewTask, project, onAccept, onReject, onClose }) {
+  const webviewRef = useRef(null)
+  const [generating, setGenerating] = useState(false)
+  const [streamText, setStreamText] = useState('')
+  const [generatedCode, setGeneratedCode] = useState(null)
+  const [accepting, setAccepting] = useState(false)
+  const [accepted, setAccepted] = useState(false)
+  const [acceptResult, setAcceptResult] = useState(null)
+  const [error, setError] = useState(null)
+
+  // Generate code when a task is selected for preview
+  useEffect(() => {
+    if (!previewTask || !window.electronAI) return
+
+    let cancelled = false
+    setGenerating(true)
+    setStreamText('')
+    setGeneratedCode(null)
+    setAccepted(false)
+    setAcceptResult(null)
+    setError(null)
+
+    let fullText = ''
+
+    const onChunk = (chunk) => {
+      if (cancelled) return
+      fullText += chunk
+      setStreamText(fullText.slice(-300))
+    }
+
+    const onDone = (result) => {
+      if (cancelled) return
+      setGenerating(false)
+      try {
+        const cleaned = result
+          .replace(/```json\n?/g, '')
+          .replace(/```\n?/g, '')
+          .trim()
+        const parsed = JSON.parse(cleaned)
+        if (parsed.files && typeof parsed.files === 'object') {
+          setGeneratedCode(parsed)
+        } else {
+          setError('Generated output missing file changes')
+        }
+      } catch {
+        setError('Failed to parse AI response. Try again with a different task.')
+      }
+    }
+
+    window.electronAI.onFeatureCodeChunk(onChunk)
+    window.electronAI.onFeatureCodeDone(onDone)
+
+    window.electronAI.generateFeatureCode({
+      taskTitle: previewTask.title,
+      projectPath: project?.path,
+    }).catch((err) => {
+      if (!cancelled) {
+        setGenerating(false)
+        setError(err?.message || 'Failed to generate code')
+      }
+    })
+
+    return () => {
+      cancelled = true
+      window.electronAI.removeFeatureCodeListeners()
+    }
+  }, [previewTask?.id])
+
+  async function handleAccept() {
+    if (!generatedCode?.files || !window.electronAI || !project?.path) return
+    setAccepting(true)
+    setError(null)
+    setAcceptResult(null)
+
+    try {
+      const result = await window.electronAI.applyFeatureFiles({
+        projectPath: project.path,
+        files: generatedCode.files,
+        featureId: previewTask.id,
+        commitMessage: `feat: ${previewTask.title}`,
+      })
+
+      if (result.success) {
+        setAccepted(true)
+        setAcceptResult(result)
+        onAccept(previewTask, generatedCode)
+
+        // If pushed to remote, Vercel will rebuild — reload webview after delay
+        if (result.pushed) {
+          setTimeout(() => {
+            try { webviewRef.current?.reload() } catch {}
+          }, 15000)
+        }
+      } else {
+        setError('Failed to write files: ' + (result.error || 'unknown error'))
+      }
+    } catch (err) {
+      setError('Error: ' + (err?.message || 'unknown error'))
+    }
+    setAccepting(false)
+  }
+
+  function handleReject() {
+    onReject(previewTask)
+  }
+
+  const fileCount = generatedCode?.files ? Object.keys(generatedCode.files).length : 0
+  const showActions = previewTask && generatedCode && !generatedCode.error && !generating && !accepted
+
+  return (
+    <div className="preview-panel">
+      <div className="preview-panel-header">
+        <div className="preview-panel-title-row">
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          <span className="preview-panel-title">Live Preview</span>
+          {appUrl && (
+            <span className="preview-panel-url">{appUrl.replace(/^https?:\/\//, '')}</span>
+          )}
+          {previewTask && (
+            <span className="preview-panel-feature-tag">{previewTask.title}</span>
+          )}
+        </div>
+        <div className="preview-panel-actions">
+          {showActions && (
+            <>
+              <button className="preview-accept-btn" onClick={handleAccept} disabled={accepting}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6l2.5 2.5L9.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {accepting ? 'Writing files…' : 'Accept & Apply'}
+              </button>
+              <button className="preview-reject-btn" onClick={handleReject} disabled={accepting}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                Reject
+              </button>
+            </>
+          )}
+          <button className="preview-close-btn" onClick={onClose} title="Close preview">
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="preview-panel-body">
+        <div className="preview-webview-container">
+          {appUrl ? (
+            <webview
+              ref={webviewRef}
+              src={appUrl}
+              className="preview-webview"
+              allowpopups="true"
+            />
+          ) : (
+            <div className="preview-placeholder">
+              <svg width="32" height="32" fill="none" stroke="var(--text-muted)" strokeWidth="1" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+              </svg>
+              <p>No hosted app URL found</p>
+              <p className="preview-placeholder-sub">
+                Add a URL to your project's README.md
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Feature generation status — overlaid at bottom of webview */}
+        {previewTask && (
+          <div className="preview-feature-status">
+            {generating && (
+              <div className="preview-generating">
+                <div className="preview-generating-header">
+                  <div className="preview-spinner" />
+                  <span>Generating code for: <strong>{previewTask.title}</strong></span>
+                </div>
+                {streamText && (
+                  <pre className="preview-stream">{streamText}</pre>
+                )}
+              </div>
+            )}
+
+            {generatedCode && !generating && !accepted && (
+              <div className="preview-generated">
+                <div className="preview-generated-header">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <circle cx="7" cy="7" r="7" fill="rgba(124,106,247,0.15)"/>
+                    <path d="M4.5 7l2 2 3.5-4" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Code ready — {fileCount} file{fileCount !== 1 ? 's' : ''} to modify</span>
+                </div>
+                {generatedCode.summary && (
+                  <p className="preview-summary">{generatedCode.summary}</p>
+                )}
+                <div className="preview-files-list">
+                  {Object.keys(generatedCode.files).map(f => (
+                    <div key={f} className="preview-file-item">
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                      </svg>
+                      <span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {accepted && acceptResult && (
+              <div className="preview-applied">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="9" fill="rgba(34,197,94,0.15)"/>
+                  <path d="M5.5 9l2.5 2.5L12.5 6" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <div>
+                  <p className="preview-applied-title">Feature accepted — {fileCount} file{fileCount !== 1 ? 's' : ''} updated</p>
+                  <p className="preview-applied-sub">
+                    {acceptResult.pushed
+                      ? 'Committed and pushed to remote. Vercel will redeploy — preview will refresh shortly.'
+                      : acceptResult.committed
+                      ? `Committed locally.${acceptResult.pushError ? ' Push failed — push manually to update the hosted app.' : ''}`
+                      : 'Files written to project. No git repo detected — commit and push manually to deploy.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="preview-error">
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function TasksTab({ boardTasks, setBoardTasks, project }) {
   const [selections, setSelections] = useState({})
   const [showJira, setShowJira] = useState(false)
+  const [appUrl, setAppUrl] = useState(null)
+  const [urlLoading, setUrlLoading] = useState(false)
+  const [previewTask, setPreviewTask] = useState(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const allTasks = Object.values(boardTasks).flat()
+
+  // Fetch the hosted app URL from the project's README on mount
+  useEffect(() => {
+    if (!project?.path || !window.electronProject) return
+
+    setUrlLoading(true)
+    window.electronProject.getProjectUrl({ projectPath: project.path })
+      .then((result) => {
+        if (result.url) {
+          setAppUrl(result.url)
+          setShowPreview(true)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setUrlLoading(false))
+  }, [project?.path])
 
   function handleToggle(taskId, forceState) {
     setSelections((prev) => {
       const current = prev[taskId]
       if (forceState) {
-        // clicking approve/reject buttons directly
         return { ...prev, [taskId]: current === forceState ? null : forceState }
       }
-      // clicking the card body cycles: null → approved → rejected → null
       const next = current === null || !current ? 'approved'
         : current === 'approved' ? 'rejected'
         : null
@@ -296,13 +568,32 @@ export default function TasksTab({ boardTasks, setBoardTasks }) {
     setSelections({})
   }
 
+  function handlePreview(task) {
+    setPreviewTask(task)
+    setShowPreview(true)
+  }
+
+  function handleAcceptFeature(task) {
+    setSelections(prev => ({ ...prev, [task.id]: 'approved' }))
+  }
+
+  function handleRejectFeature(task) {
+    setSelections(prev => ({ ...prev, [task.id]: 'rejected' }))
+    setPreviewTask(null)
+  }
+
+  function handleClosePreview() {
+    setPreviewTask(null)
+    setShowPreview(false)
+  }
+
   const approvedTasks = allTasks.filter((t) => selections[t.id] === 'approved')
   const rejectedTasks = allTasks.filter((t) => selections[t.id] === 'rejected')
   const anySelected = approvedTasks.length > 0 || rejectedTasks.length > 0
   const totalTasks = allTasks.length
 
   return (
-    <div className="tasks-page">
+    <div className={`tasks-page ${showPreview ? 'tasks-page--with-preview' : ''}`}>
       <div className="tasks-topbar">
         <div>
           <h1 className="tasks-heading">Implementation Tasks</h1>
@@ -313,6 +604,15 @@ export default function TasksTab({ boardTasks, setBoardTasks }) {
           </p>
         </div>
         <div className="tasks-actions">
+          {!showPreview && appUrl && (
+            <button className="tasks-btn-outline" onClick={() => setShowPreview(true)}>
+              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              Show Preview
+            </button>
+          )}
           <button className="tasks-btn-outline" onClick={clearAll} disabled={!anySelected}>
             Clear selection
           </button>
@@ -321,7 +621,6 @@ export default function TasksTab({ boardTasks, setBoardTasks }) {
             disabled={approvedTasks.length === 0}
             onClick={() => setShowJira(true)}
           >
-            {/* Jira icon */}
             <svg width="13" height="13" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="4" fill="rgba(255,255,255,0.2)"/>
               <path d="M16.5 7l-9 9 4.5 4.5 4.5-4.5 4.5 4.5 4.5-4.5-9-9z" fill="#fff"/>
@@ -334,7 +633,6 @@ export default function TasksTab({ boardTasks, setBoardTasks }) {
         </div>
       </div>
 
-      {/* Selection summary bar */}
       {anySelected && (
         <div className="tasks-selection-bar">
           {approvedTasks.length > 0 && (
@@ -364,9 +662,22 @@ export default function TasksTab({ boardTasks, setBoardTasks }) {
             tasks={boardTasks[col.id] || []}
             selections={selections}
             onToggle={handleToggle}
+            activeTaskId={previewTask?.id}
+            onPreview={handlePreview}
           />
         ))}
       </div>
+
+      {showPreview && (
+        <PreviewPanel
+          appUrl={appUrl}
+          previewTask={previewTask}
+          project={project}
+          onAccept={handleAcceptFeature}
+          onReject={handleRejectFeature}
+          onClose={handleClosePreview}
+        />
+      )}
 
       {showJira && (
         <JiraModal
