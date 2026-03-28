@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import Auth from './Auth'
 import Account from './Account'
 import Dashboard from './Dashboard'
 import ProjectTab from './ProjectTab'
-import Propose from './Propose'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -81,8 +80,6 @@ export default function App() {
           ? <div className="placeholder"><h2>Settings</h2><p>Settings coming soon.</p></div>
           : activeTab === 'project'
           ? <ProjectTab project={project} />
-          : activeTab === 'propose'
-          ? <Propose />
           : (
             <div className="placeholder">
               <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>
