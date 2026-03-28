@@ -19,6 +19,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
+  const [boardTasks, setBoardTasks] = useState({ frontend: [], backend: [], qa: [] })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -34,6 +35,34 @@ export default function App() {
   const user = session.user
   const avatarUrl = user.user_metadata?.avatar_url
   const displayName = user.user_metadata?.full_name || user.user_metadata?.user_name || user.email
+
+  function handleSendTask(task) {
+    // Determine column from task label or default to frontend
+    const label = (task.label || '').toLowerCase()
+    let column = 'frontend'
+    if (label.includes('api') || label.includes('backend') || label.includes('schema') || label.includes('database') || label.includes('server') || label.includes('endpoint')) {
+      column = 'backend'
+    } else if (label.includes('test') || label.includes('qa') || label.includes('validate') || label.includes('verify')) {
+      column = 'qa'
+    }
+
+    const newTask = {
+      id: `MIRA-${Date.now().toString(36).toUpperCase()}`,
+      category: task.category || 'FEATURE',
+      title: task.label,
+      assignees: [],
+      status: null,
+      fromProposal: true,
+    }
+
+    setBoardTasks(prev => ({
+      ...prev,
+      [column]: [...prev[column], newTask],
+    }))
+
+    // Auto-switch to Tasks tab
+    setActiveTab('tasks')
+  }
 
   return (
     <div className="app">
@@ -84,9 +113,9 @@ export default function App() {
           : activeTab === 'project'
           ? <ProjectTab project={project} />
           : activeTab === 'propose'
-          ? <Propose project={project} />
+          ? <Propose project={project} onSendTask={handleSendTask} />
           : activeTab === 'tasks'
-          ? <TasksTab />
+          ? <TasksTab boardTasks={boardTasks} setBoardTasks={setBoardTasks} />
           : activeTab === 'dashboard'
           ? <ProjectDashboard project={project} />
           : (

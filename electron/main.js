@@ -3,10 +3,12 @@ const path = require('path')
 const { execFile } = require('child_process')
 const fs = require('fs')
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') })
-const { GoogleGenerativeAI } = require('@google/generative-ai')
 
 const isDev = process.env.NODE_ENV !== 'production'
 const PROTOCOL = 'aipm'
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const BACKEND_URL = 'http://127.0.0.1:8000'
 
 // Register custom protocol for OAuth redirect
 if (process.defaultApp) {
@@ -43,6 +45,98 @@ function handleOAuthCallback(url) {
     mainWindow.webContents.send('oauth-callback', url)
     mainWindow.focus()
   }
+}
+
+// ── CSV file loading ──────────────────────────────────────────────────────────
+function loadCSVContext(projectPath) {
+  let csvContext = ''
+  const csvFiles = ['reviews.csv', 'synthetic_data.csv']
+  
+  for (const csvFile of csvFiles) {
+    // Try project path first, then app root
+    const candidates = [
+      projectPath ? path.join(projectPath, csvFile) : null,
+      path.join(__dirname, '..', csvFile),
+    ].filter(Boolean)
+    
+    for (const filePath of candidates) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath, 'utf8')
+          csvContext += `\n\n--- ${csvFile} ---\n${content.slice(0, 6000)}`
+          break
+        }
+      } catch {}
+    }
+  }
+  
+  return csvContext
+}
+
+// ── OpenAI API helper ─────────────────────────────────────────────────────────
+async function callOpenAI({ messages, stream = false, tools = null, temperature = 0.7 }) {
+  const body = {
+    model: 'gpt-4o-mini',
+    messages,
+    temperature,
+  }
+  if (tools) body.tools = tools
+  if (stream) body.stream = true
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`OpenAI API error ${response.status}: ${errText}`)
+  }
+
+  if (stream) {
+    return response  // Return the raw response for streaming
+  }
+
+  return response.json()
+}
+
+// ── Stream OpenAI response and emit chunks ────────────────────────────────────
+async function streamOpenAI(event, messages, channelName = 'proposal-chunk') {
+  const response = await callOpenAI({ messages, stream: true })
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let fullText = ''
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed === 'data: [DONE]') continue
+      if (!trimmed.startsWith('data: ')) continue
+
+      try {
+        const json = JSON.parse(trimmed.slice(6))
+        const content = json.choices?.[0]?.delta?.content || ''
+        if (content) {
+          fullText += content
+          event.sender.send(channelName, content)
+        }
+      } catch {}
+    }
+  }
+
+  return fullText
 }
 
 app.whenReady().then(() => {
@@ -102,72 +196,73 @@ app.whenReady().then(() => {
     })
   })
 
-  // ── Agentic chat with full filesystem access ───────────────────────────────
+  // ── Agentic chat with OpenAI + filesystem tools ────────────────────────────
   ipcMain.handle('chat-message', async (event, { message, history, projectPath }) => {
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env.local')
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const csvContext = loadCSVContext(projectPath)
 
-    const tools = [{
-      functionDeclarations: [
-        {
+    const tools = [
+      {
+        type: 'function',
+        function: {
           name: 'read_file',
           description: 'Read the contents of a file in the project',
           parameters: {
-            type: 'OBJECT',
+            type: 'object',
             properties: {
-              file_path: { type: 'STRING', description: 'Path relative to project root or absolute' },
+              file_path: { type: 'string', description: 'Path relative to project root or absolute' },
             },
             required: ['file_path'],
           },
         },
-        {
+      },
+      {
+        type: 'function',
+        function: {
           name: 'list_directory',
           description: 'List files and folders in a directory',
           parameters: {
-            type: 'OBJECT',
+            type: 'object',
             properties: {
-              dir_path: { type: 'STRING', description: 'Path relative to project root or absolute' },
+              dir_path: { type: 'string', description: 'Path relative to project root or absolute' },
             },
             required: ['dir_path'],
           },
         },
-        {
+      },
+      {
+        type: 'function',
+        function: {
           name: 'search_files',
           description: 'Search for a text pattern across all project files',
           parameters: {
-            type: 'OBJECT',
+            type: 'object',
             properties: {
-              pattern: { type: 'STRING', description: 'Text to search for' },
+              pattern: { type: 'string', description: 'Text to search for' },
             },
             required: ['pattern'],
           },
         },
-        {
+      },
+      {
+        type: 'function',
+        function: {
           name: 'update_proposal',
-          description: 'Update or extend the proposal canvas shown to the user. Call this to add insights, update sections, or append new findings based on what you read.',
+          description: 'Update or extend the proposal canvas shown to the user.',
           parameters: {
-            type: 'OBJECT',
+            type: 'object',
             properties: {
               patch: {
-                type: 'OBJECT',
-                description: 'Fields to update on the proposal. All fields optional.',
-                properties: {
-                  title: { type: 'STRING' },
-                  why: { type: 'STRING' },
-                  signals: { type: 'ARRAY', items: { type: 'OBJECT' } },
-                  ui: { type: 'ARRAY', items: { type: 'OBJECT' } },
-                  schema: { type: 'ARRAY', items: { type: 'OBJECT' } },
-                  tasks: { type: 'ARRAY', items: { type: 'OBJECT' } },
-                },
+                type: 'object',
+                description: 'Fields to update on the proposal.',
               },
             },
             required: ['patch'],
           },
         },
-      ],
-    }]
+      },
+    ]
 
     function executeTool(name, args) {
       try {
@@ -175,7 +270,6 @@ app.whenReady().then(() => {
           const filePath = path.isAbsolute(args.file_path)
             ? args.file_path
             : path.join(projectPath || '', args.file_path)
-          // Cap at 6,000 chars (~1,500 tokens) per file
           return fs.readFileSync(filePath, 'utf8').slice(0, 6000)
         }
         if (name === 'list_directory') {
@@ -205,7 +299,6 @@ app.whenReady().then(() => {
             }
           }
           searchDir(projectPath || '')
-          // Cap results to avoid huge lists
           return results.slice(0, 20).join('\n') || 'No matches found'
         }
         if (name === 'update_proposal') {
@@ -217,36 +310,61 @@ app.whenReady().then(() => {
       }
     }
 
-    const systemPrompt = `You are Mira, an AI PM assistant. Use tools to read project files when needed. Be concise. Project root: ${projectPath || 'unknown'}`
+    const systemMessage = {
+      role: 'system',
+      content: `You are Mira, an AI PM assistant using GPT-4o Mini. Use tools to read project files when needed. Be concise. Project root: ${projectPath || 'unknown'}
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', tools })
+Available context from product data:
+${csvContext || 'No CSV data loaded'}`
+    }
 
-    // Cap history to last 10 messages to limit token usage
-    const trimmedHistory = history.slice(-10)
-
-    const chat = model.startChat({
-      systemInstruction: systemPrompt,
-      history: trimmedHistory.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
-      })),
-    })
+    // Build message history
+    const messages = [systemMessage]
+    const trimmedHistory = (history || []).slice(-10)
+    for (const m of trimmedHistory) {
+      messages.push({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      })
+    }
+    messages.push({ role: 'user', content: message })
 
     // Agentic loop — handle multiple rounds of tool calls
-    let result = await chat.sendMessage(message)
-    let fullText = ''
     let iterations = 0
     const MAX_ITERATIONS = 10
+    let fullText = ''
 
     while (iterations++ < MAX_ITERATIONS) {
-      const response = result.response
+      const response = await callOpenAI({ messages, tools })
+      const choice = response.choices?.[0]
 
-      // Check for tool/function calls
-      const functionCalls = response.functionCalls?.() || []
+      if (!choice) break
 
-      if (functionCalls.length === 0) {
-        // No tool calls — this is the final text response
-        try { fullText = response.text() } catch {}
+      const finishReason = choice.finish_reason
+      const assistantMsg = choice.message
+
+      if (finishReason === 'tool_calls' || assistantMsg?.tool_calls?.length) {
+        // Execute tool calls
+        messages.push(assistantMsg)
+
+        for (const toolCall of assistantMsg.tool_calls) {
+          const fnName = toolCall.function.name
+          let fnArgs = {}
+          try { fnArgs = JSON.parse(toolCall.function.arguments) } catch {}
+          
+          event.sender.send('chat-tool-call', { name: fnName, args: fnArgs })
+          const toolResult = executeTool(fnName, fnArgs)
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+          })
+        }
+        // Continue loop — model will process tool results
+      } else {
+        // Final text response
+        fullText = assistantMsg?.content || ''
         // Stream it word by word
         const words = fullText.split(' ')
         for (let i = 0; i < words.length; i += 3) {
@@ -255,31 +373,19 @@ app.whenReady().then(() => {
         }
         break
       }
-
-      // Execute all tool calls
-      const toolResults = []
-      for (const call of functionCalls) {
-        const { name, args } = call
-        event.sender.send('chat-tool-call', { name, args })
-        const toolResult = executeTool(name, args)
-        toolResults.push({
-          functionResponse: { name, response: { result: toolResult } },
-        })
-      }
-
-      result = await chat.sendMessage(toolResults)
     }
 
     return fullText
   })
+
+  // ── Generate proposal with OpenAI GPT-4o Mini ─────────────────────────────
   ipcMain.handle('generate-proposal', async (event, { prompt, files, projectPath }) => {
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env.local')
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    // Load CSV context from project
+    const csvContext = loadCSVContext(projectPath)
 
-    // Build file context
+    // Build file context from uploaded files
     let fileContext = ''
     if (files?.length) {
       fileContext = files.map(f => `\n\n--- ${f.name} ---\n${f.content.slice(0, 8000)}`).join('')
@@ -302,31 +408,39 @@ app.whenReady().then(() => {
       } catch {}
     }
 
-    const systemPrompt = `You are Mira, an AI product management assistant. Analyze the context and generate a structured product proposal.
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Mira, an AI product management assistant using GPT-4o Mini. Analyze the context and generate a structured product proposal.
+
+You have access to REAL USER DATA from CSV files. Use this data to ground your proposals in evidence.
+
+PRODUCT DATA (from CSV files):
+${csvContext || 'No CSV data available'}
 
 Respond with ONLY valid JSON, no markdown fences, no explanation outside the JSON:
 {
   "title": "Short feature title",
-  "why": "2-3 sentences grounded in the signals/data provided",
-  "signals": [{ "source": "Source name", "quote": "Key insight" }],
+  "why": "2-3 sentences grounded in the signals/data provided. Reference specific Review IDs and metrics.",
+  "signals": [{ "source": "Source name (e.g. Review #101 - Persona)", "quote": "Key insight from the data" }],
   "ui": [{ "file": "path/to/file", "change": "What needs to change" }],
   "schema": [{ "sql": "ALTER TABLE ..." }],
-  "tasks": [{ "id": 1, "label": "Task description" }]
+  "tasks": [{ "id": 1, "label": "Task description with context on WHY" }]
 }
 
-Generate 3-5 signals, 2-3 UI changes, 1-2 schema changes, 4-6 tasks.`
+Generate 3-5 signals (cite specific Review IDs), 2-3 UI changes, 1-2 schema changes, 4-6 tasks.
+Each signal MUST reference a specific review or data point from the CSV data.
+Each task should explain WHY it matters (not just what to do).`
+      },
+      {
+        role: 'user',
+        content: `Request: ${prompt}${fileContext}${codeContext}`
+      }
+    ]
 
-    const result = await model.generateContentStream([
-      { text: systemPrompt },
-      { text: `Request: ${prompt}${fileContext}${codeContext}` },
-    ])
+    // Stream the response
+    const fullText = await streamOpenAI(event, messages, 'proposal-chunk')
 
-    let fullText = ''
-    for await (const chunk of result.stream) {
-      const text = chunk.text()
-      fullText += text
-      event.sender.send('proposal-chunk', text)
-    }
     event.sender.send('proposal-done', fullText)
     return fullText
   })

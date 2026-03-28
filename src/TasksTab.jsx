@@ -1,55 +1,4 @@
-import { useState } from 'react'
-
-const MOCK_TASKS = {
-  frontend: [
-    {
-      id: 'OBS-241',
-      category: 'UI/UX',
-      title: 'Refactor Transaction List to Glassmorphism',
-      assignees: ['JE', 'AM'],
-      comments: 3,
-      links: 1,
-      status: null,
-    },
-    {
-      id: 'OBS-242',
-      category: 'INTEGRATION',
-      title: 'Connect Metadata Schema to Editor View',
-      assignees: [],
-      progress: 65,
-      status: 'in_progress',
-    },
-  ],
-  backend: [
-    {
-      id: 'OBS-245',
-      category: 'SECURITY',
-      title: 'Implement JWT Rotation for Metadata Endpoints',
-      assignees: [],
-      priority: 'high',
-      status: null,
-    },
-    {
-      id: 'OBS-246',
-      category: 'CORE API',
-      title: 'Sync Local Schema Cache with Production DB',
-      assignees: [],
-      status: 'completed',
-    },
-  ],
-  qa: [
-    {
-      id: 'OBS-249',
-      category: 'END-TO-END',
-      title: 'Validate Transaction Persistence via Mock API',
-      assignees: ['RT'],
-      statusLabel: 'Testing in Staging...',
-      status: 'testing',
-    },
-  ],
-}
-
-const ALL_TASKS = Object.values(MOCK_TASKS).flat()
+import { useState, useEffect } from 'react'
 
 const COLUMNS = [
   { id: 'frontend', label: 'Frontend', color: '#7c6af7' },
@@ -63,6 +12,9 @@ const CATEGORY_COLORS = {
   'SECURITY':    { bg: 'rgba(248,113,113,0.15)', color: '#f87171' },
   'CORE API':    { bg: 'rgba(16,185,129,0.15)',  color: '#34d399' },
   'END-TO-END':  { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24' },
+  'FEATURE':     { bg: 'rgba(139,92,246,0.15)',   color: '#a78bfa' },
+  'BUG':         { bg: 'rgba(239,68,68,0.15)',    color: '#f87171' },
+  'TASK':        { bg: 'rgba(59,130,246,0.15)',    color: '#60a5fa' },
 }
 
 function Avatar({ initials }) {
@@ -147,6 +99,15 @@ function TaskCard({ task, selectionState, onToggle }) {
         </div>
       )}
 
+      {task.fromProposal && !task.status && (
+        <div className="task-from-proposal-badge">
+          <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          FROM PROPOSAL
+        </div>
+      )}
+
       {(task.assignees?.length > 0 || task.comments || task.links) && task.status !== 'testing' && (
         <div className="task-card-footer">
           <div className="task-assignees">
@@ -217,6 +178,12 @@ function Column({ col, tasks, selections, onToggle }) {
             onToggle={onToggle}
           />
         ))}
+        {tasks.length === 0 && (
+          <div className="tasks-col-empty">
+            <p>No tasks yet</p>
+            <p className="tasks-col-empty-hint">Tasks sent from proposals will appear here</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -303,11 +270,12 @@ function JiraModal({ tasks, onClose, onSubmit }) {
   )
 }
 
-export default function TasksTab() {
-  const [tasks] = useState(MOCK_TASKS)
+export default function TasksTab({ boardTasks, setBoardTasks }) {
   // selections: { [taskId]: 'approved' | 'rejected' }
   const [selections, setSelections] = useState({})
   const [showJira, setShowJira] = useState(false)
+
+  const allTasks = Object.values(boardTasks).flat()
 
   function handleToggle(taskId, forceState) {
     setSelections((prev) => {
@@ -328,16 +296,21 @@ export default function TasksTab() {
     setSelections({})
   }
 
-  const approvedTasks = ALL_TASKS.filter((t) => selections[t.id] === 'approved')
-  const rejectedTasks = ALL_TASKS.filter((t) => selections[t.id] === 'rejected')
+  const approvedTasks = allTasks.filter((t) => selections[t.id] === 'approved')
+  const rejectedTasks = allTasks.filter((t) => selections[t.id] === 'rejected')
   const anySelected = approvedTasks.length > 0 || rejectedTasks.length > 0
+  const totalTasks = allTasks.length
 
   return (
     <div className="tasks-page">
       <div className="tasks-topbar">
         <div>
           <h1 className="tasks-heading">Implementation Tasks</h1>
-          <p className="tasks-subheading">Sprint 24: Core Infrastructure Migration</p>
+          <p className="tasks-subheading">
+            {totalTasks > 0
+              ? `${totalTasks} task${totalTasks > 1 ? 's' : ''} from proposals`
+              : 'Send tasks from Propose to populate the board'}
+          </p>
         </div>
         <div className="tasks-actions">
           <button className="tasks-btn-outline" onClick={clearAll} disabled={!anySelected}>
@@ -388,7 +361,7 @@ export default function TasksTab() {
           <Column
             key={col.id}
             col={col}
-            tasks={tasks[col.id] || []}
+            tasks={boardTasks[col.id] || []}
             selections={selections}
             onToggle={handleToggle}
           />

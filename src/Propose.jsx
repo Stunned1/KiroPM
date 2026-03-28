@@ -28,13 +28,27 @@ function SchemaChange({ item }) {
   )
 }
 
-function TaskRow({ task }) {
+function TaskRow({ task, onSendTask }) {
   const [done, setDone] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  function handleSend() {
+    if (sent) return
+    onSendTask?.(task)
+    setSent(true)
+  }
+
   return (
     <li className={`task-row ${done ? 'task-done' : ''}`}>
       <input type="checkbox" checked={done} onChange={() => setDone(v => !v)} />
       <span>{task.label}</span>
-      <button className="send-agent-btn">Send to agent →</button>
+      <button
+        className={`send-agent-btn ${sent ? 'send-agent-btn--sent' : ''}`}
+        onClick={handleSend}
+        disabled={sent}
+      >
+        {sent ? '✓ Sent to Tasks' : 'Send to Tasks →'}
+      </button>
     </li>
   )
 }
@@ -133,7 +147,7 @@ function EmptyState({ onGenerate, compact }) {
 }
 
 // ── Proposal view (main area) ─────────────────────────────────────────────────
-function ProposalView({ proposal }) {
+function ProposalView({ proposal, onSendTask }) {
   return (
     <div className="proposal-view">
       <div className="proposal-header">
@@ -162,7 +176,7 @@ function ProposalView({ proposal }) {
         <section className="proposal-section">
           <h3 className="section-title">Development tasks</h3>
           <ul className="tasks-list">
-            {proposal.tasks.map(task => <TaskRow key={task.id} task={task} />)}
+            {proposal.tasks.map(task => <TaskRow key={task.id} task={task} onSendTask={onSendTask} />)}
           </ul>
         </section>
       </div>
@@ -171,7 +185,7 @@ function ProposalView({ proposal }) {
 }
 
 // ── Agent sidebar ─────────────────────────────────────────────────────────────
-function AgentSidebar({ prompt, streamText, done, onClose, project, onProposalPatch }) {
+function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, onProposalPatch }) {
   const [messages, setMessages] = useState([])
   const [toolCalls, setToolCalls] = useState([])
   const [input, setInput] = useState('')
@@ -184,11 +198,15 @@ function AgentSidebar({ prompt, streamText, done, onClose, project, onProposalPa
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight
   }, [messages, streamingReply, toolCalls])
 
-  // Auto-send initial prompt as chat once proposal is done
+  // Auto-send initial prompt as chat once proposal is done, WITH proposal context
   React.useEffect(() => {
     if (done && !initialSent.current) {
       initialSent.current = true
-      runChat(prompt, [])
+      // Inject proposal context so the model knows what it just generated
+      const proposalContext = proposal
+        ? `\n\n[CONTEXT — The following proposal was just generated and is visible to the user]:\nTitle: ${proposal.title}\nRationale: ${proposal.why}\nSignals: ${proposal.signals?.map(s => `${s.source}: ${s.quote}`).join('; ')}\nTasks: ${proposal.tasks?.map(t => t.label).join('; ')}\n[END CONTEXT]\n\nThe user's original request was: ${prompt}\nYou can now answer follow-up questions about this proposal.`
+        : prompt
+      runChat(proposalContext, [])
     }
   }, [done])
 
@@ -257,7 +275,7 @@ function AgentSidebar({ prompt, streamText, done, onClose, project, onProposalPa
         <div className="thinking-stream">
           <div className={`thinking-step ${done ? 'thinking-done' : 'thinking-active'}`}>
             {done ? <span className="thinking-check">✓</span> : <span className="thinking-spinner" />}
-            {done ? 'Proposal generated' : 'Analyzing with Gemini 2.5 Flash…'}
+            {done ? 'Proposal generated' : 'Analyzing with GPT-4o Mini…'}
           </div>
           {!done && streamText && <div className="stream-preview">{streamText.slice(-200)}</div>}
         </div>
@@ -309,7 +327,7 @@ function AgentSidebar({ prompt, streamText, done, onClose, project, onProposalPa
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function Propose({ project }) {
+export default function Propose({ project, onSendTask }) {
   const [stage, setStage] = useState('idle') // idle | thinking | transitioning | done | error
   const [submittedPrompt, setSubmittedPrompt] = useState('')
   const [streamText, setStreamText] = useState('')
@@ -358,7 +376,7 @@ export default function Propose({ project }) {
             <div className="thinking-stream">
               <div className="thinking-step thinking-active">
                 <span className="thinking-spinner" />
-                Analyzing with Gemini 2.5 Flash…
+                Analyzing with GPT-4o Mini…
               </div>
               {streamText && (
                 <div className="stream-preview">{streamText.slice(-200)}</div>
@@ -388,7 +406,7 @@ export default function Propose({ project }) {
         )}
         {stage === 'done' && proposal && (
           <div className="proposal-fadein">
-            <ProposalView proposal={proposal} />
+            <ProposalView proposal={proposal} onSendTask={onSendTask} />
           </div>
         )}
       </div>
@@ -396,6 +414,7 @@ export default function Propose({ project }) {
       {showSidebar && (
         <AgentSidebar
           prompt={submittedPrompt}
+          proposal={proposal}
           streamText={streamText}
           done={stage === 'done'}
           onClose={() => setStage('idle')}

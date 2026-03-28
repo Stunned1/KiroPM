@@ -1,34 +1,44 @@
 from typing import Dict, Any
-import json
+import csv
 from pathlib import Path
+
 
 def ingest_customer_interviews(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Reads customer interview file(s) and extracts structured insights.
+    Reads reviews.csv and extracts structured customer feedback.
     
-    Expected input file format (JSON or text):
-    - interviews.json: [{ "date": "...", "participant": "...", "transcript": "..." }]
-    - Or plain text files that need LLM parsing
+    The CSV contains real user reviews with:
+    - Review_ID, Source, Author_Persona, Sentiment, Content, Tags
+    
+    These are treated as "customer interviews" / user feedback signals.
     """
     
-    # TODO: Configure interview data path
-    interview_path = Path("data/interviews.json")
+    # Look for reviews.csv in parent directory (project root) or data directory
+    possible_paths = [
+        Path(__file__).parent.parent.parent / "reviews.csv",
+        Path("reviews.csv"),
+        Path("data/reviews.csv"),
+    ]
     
     interviews = []
     
-    if interview_path.exists():
-        with open(interview_path) as f:
-            raw_data = json.load(f)
-            
-        # TODO: Use LLM to extract structured insights from transcripts
-        # For now, pass through raw data
-        for item in raw_data:
-            interviews.append({
-                "source": item.get("source", "interview"),
-                "transcript": item.get("transcript", ""),
-                "date": item.get("date", ""),
-                "sentiment": item.get("sentiment", "neutral"),
-                "pain_points": []  # TODO: LLM extraction
-            })
+    for reviews_path in possible_paths:
+        if reviews_path.exists():
+            with open(reviews_path, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    interviews.append({
+                        "review_id": row.get("Review_ID", ""),
+                        "source": row.get("Source", "unknown"),
+                        "author_persona": row.get("Author_Persona", ""),
+                        "transcript": row.get("Content", ""),
+                        "sentiment": row.get("Sentiment", "neutral").lower(),
+                        "tags": [t.strip() for t in row.get("Tags", "").split(",") if t.strip()],
+                        "pain_points": [],  # Will be enriched by LLM in synthesis
+                    })
+            print(f"✓ Loaded {len(interviews)} reviews from {reviews_path}")
+            break
+    else:
+        print("⚠ No reviews.csv found. Continuing with empty interviews.")
     
     return {"customer_interviews": interviews}
