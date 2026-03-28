@@ -3,18 +3,20 @@ import { supabase } from './supabase'
 import Auth from './Auth'
 import Account from './Account'
 import Dashboard from './Dashboard'
-import FileBrowser from './FileBrowser'
+import ProjectTab from './ProjectTab'
 
 const NAV_ITEMS = [
+  { id: 'propose', label: 'Propose' },
   { id: 'signals', label: 'Signals' },
   { id: 'insights', label: 'Insights' },
   { id: 'opportunities', label: 'Opportunities' },
   { id: 'specs', label: 'Specs' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'project', label: 'Project' },
 ]
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('signals')
+  const [activeTab, setActiveTab] = useState('propose')
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
 
@@ -65,11 +67,11 @@ export default function App() {
         </div>
       </aside>
 
-      <FileBrowser project={project} />
-
       <main className="content">
         {activeTab === 'account'
           ? <Account user={user} />
+          : activeTab === 'project'
+          ? <ProjectTab project={project} />
           : (
             <div className="placeholder">
               <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>

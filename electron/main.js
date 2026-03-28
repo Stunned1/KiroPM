@@ -73,6 +73,14 @@ app.whenReady().then(() => {
       return a.name.localeCompare(b.name)
     })
   })
+
+  ipcMain.handle('read-file', async (_event, filePath) => {
+    return fs.readFileSync(filePath, 'utf8')
+  })
+
+  ipcMain.handle('write-file', async (_event, { filePath, content }) => {
+    fs.writeFileSync(filePath, content, 'utf8')
+  })
 })
 
 // macOS: handle protocol via open-url event

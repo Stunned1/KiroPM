@@ -756,3 +756,127 @@ nav {
   color: #f87171;
   padding: 12px;
 }
+
+/* Project tab */
+.project-tab {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.project-tree {
+  width: 220px;
+  flex-shrink: 0;
+  background: #141414;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.project-tree-header {
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tree-list {
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.tree-entry {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tree-entry:hover { background: var(--surface); color: var(--text); }
+.tree-dir { color: var(--text); font-weight: 500; }
+
+.tree-icon {
+  font-size: 10px;
+  opacity: 0.5;
+  flex-shrink: 0;
+  width: 10px;
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #1e1e1e;
+  flex-shrink: 0;
+}
+
+.editor-filename {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+}
+
+.editor-save-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.editor-save-btn:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-save-btn:disabled { opacity: 0.4; cursor: default; }
+
+.editor-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Make content fill height for project tab */
+.content:has(.project-tab) {
+  padding: 0;
+  overflow: hidden;
+}
