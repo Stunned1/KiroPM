@@ -1,47 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 
-function IntegrationRow({ icon, name, description, connected, onConnect, onDisconnect, connecting }) {
+function IntegrationRow({ icon, name, description, connected, connectedNote, onConnect, onDisconnect, connecting, connectLabel }) {
   return (
     <div className="integration-row">
       <div className="integration-info">
         <span className="integration-icon">{icon}</span>
         <div>
           <div className="integration-name">{name}</div>
-          <div className="integration-desc">{description}</div>
+          <div className="integration-desc">{connected && connectedNote ? connectedNote : description}</div>
         </div>
       </div>
       {connected
         ? <button className="integration-btn integration-btn--disconnect" onClick={onDisconnect}>Disconnect</button>
         : <button className="integration-btn integration-btn--connect" onClick={onConnect} disabled={connecting}>
-            {connecting ? 'Connecting…' : 'Connect'}
+            {connecting ? 'Connecting…' : (connectLabel || 'Connect')}
           </button>
       }
-    </div>
-  )
-}
-
-function GoogleSheetsModal({ onSave, onClose }) {
-  const [apiKey, setApiKey] = useState('')
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
-        <h3 className="modal-title">Connect Google Sheets</h3>
-        <p className="modal-desc">
-          Create an API key at <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Google Cloud Console</a> with the Google Sheets API enabled, then paste it below. Make sure your sheets are shared with "Anyone with the link".
-        </p>
-        <input
-          className="modal-input"
-          placeholder="AIzaSy..."
-          value={apiKey}
-          onChange={e => setApiKey(e.target.value)}
-          autoFocus
-        />
-        <div className="modal-actions">
-          <button className="modal-btn modal-btn--cancel" onClick={onClose}>Cancel</button>
-          <button className="modal-btn modal-btn--save" onClick={() => onSave(apiKey)} disabled={!apiKey.trim()}>Save</button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -76,15 +51,13 @@ export default function Account({ user }) {
   const avatarUrl = meta?.avatar_url
   const displayName = meta?.full_name || meta?.user_name || '—'
   const provider = user.app_metadata?.provider || 'email'
+  const signedInWithGoogle = provider === 'google'
 
   const [integrations, setIntegrations] = useState({})
   const [connecting, setConnecting] = useState(null)
   const [showNotionModal, setShowNotionModal] = useState(false)
-  const [showSheetsModal, setShowSheetsModal] = useState(false)
 
-  useEffect(() => {
-    loadIntegrations()
-  }, [])
+  useEffect(() => { loadIntegrations() }, [])
 
   async function loadIntegrations() {
     const { data } = await supabase
@@ -99,38 +72,23 @@ export default function Account({ user }) {
   }
 
   async function connectGoogleSheets() {
-    setShowSheetsModal(true)
-  }
-
-  async function saveGoogleSheetsKey(apiKey) {
-    setShowSheetsModal(false)
-    setConnecting('google_sheets')
-    try {
-      // Quick validation — try fetching the discovery doc
-      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets?key=${apiKey}`)
-      // 400 means key works but no spreadsheet ID given — that's fine
-      if (res.status !== 400 && !res.ok && res.status !== 403) throw new Error('Invalid API key')
-      await supabase.from('user_integrations').upsert({
-        user_id: user.id,
-        provider: 'google_sheets',
-        access_token: apiKey,
-        meta: {},
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,provider' })
-      await loadIntegrations()
-    } catch (err) {
-      console.error('Google Sheets connect error:', err)
-      alert(err.message)
-    } finally {
-      setConnecting(null)
-    }
+    // Redirect to sign in with Google (which also grants Sheets access)
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'aipm://auth/callback',
+        scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+        queryParams: { access_type: 'offline', prompt: 'consent' },
+      },
+    })
+    if (error) alert(error.message)
+    else if (data?.url) window.open(data.url, '_blank')
   }
 
   async function saveNotionToken(token) {
     setShowNotionModal(false)
     setConnecting('notion')
     try {
-      // Verify token works by hitting Notion API
       const res = await fetch('https://api.notion.com/v1/users/me', {
         headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
       })
@@ -145,17 +103,18 @@ export default function Account({ user }) {
       }, { onConflict: 'user_id,provider' })
       await loadIntegrations()
     } catch (err) {
-      console.error('Notion connect error:', err)
       alert(err.message)
     } finally {
       setConnecting(null)
     }
   }
 
-  async function disconnect(provider) {
-    await supabase.from('user_integrations').delete().eq('user_id', user.id).eq('provider', provider)
+  async function disconnect(p) {
+    await supabase.from('user_integrations').delete().eq('user_id', user.id).eq('provider', p)
     await loadIntegrations()
   }
+
+  const sheetsConnected = !!integrations['google_sheets'] || signedInWithGoogle
 
   return (
     <div className="account-page">
@@ -179,9 +138,11 @@ export default function Account({ user }) {
         <IntegrationRow
           icon="📊"
           name="Google Sheets"
-          description="Let Mira read spreadsheets as context"
-          connected={!!integrations['google_sheets']}
+          description="Sign in with Google to let Mira read your spreadsheets"
+          connectedNote={signedInWithGoogle ? `Connected as ${user.email}` : 'Connected'}
+          connected={sheetsConnected}
           connecting={connecting === 'google_sheets'}
+          connectLabel="Sign in with Google"
           onConnect={connectGoogleSheets}
           onDisconnect={() => disconnect('google_sheets')}
         />
@@ -190,6 +151,7 @@ export default function Account({ user }) {
           name="Notion"
           description="Let Mira query your Notion databases"
           connected={!!integrations['notion']}
+          connectedNote={integrations['notion']?.meta?.name ? `Connected as ${integrations['notion'].meta.name}` : 'Connected'}
           connecting={connecting === 'notion'}
           onConnect={() => setShowNotionModal(true)}
           onDisconnect={() => disconnect('notion')}
@@ -198,9 +160,6 @@ export default function Account({ user }) {
 
       {showNotionModal && (
         <NotionTokenModal onSave={saveNotionToken} onClose={() => setShowNotionModal(false)} />
-      )}
-      {showSheetsModal && (
-        <GoogleSheetsModal onSave={saveGoogleSheetsKey} onClose={() => setShowSheetsModal(false)} />
       )}
     </div>
   )
