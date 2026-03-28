@@ -6,17 +6,14 @@ import Dashboard from './Dashboard'
 import ProjectTab from './ProjectTab'
 
 const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'propose', label: 'Propose' },
-  { id: 'signals', label: 'Signals' },
-  { id: 'insights', label: 'Insights' },
-  { id: 'opportunities', label: 'Opportunities' },
-  { id: 'specs', label: 'Specs' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'project', label: 'Project' },
 ]
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('propose')
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
 
@@ -55,6 +52,15 @@ export default function App() {
         </nav>
         <div className="sidebar-footer">
           <button
+            className={`icon-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+            title="Settings"
+          >
+            <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button
             className={`account-btn ${activeTab === 'account' ? 'active' : ''}`}
             onClick={() => setActiveTab('account')}
           >
@@ -70,6 +76,8 @@ export default function App() {
       <main className="content">
         {activeTab === 'account'
           ? <Account user={user} />
+          : activeTab === 'settings'
+          ? <div className="placeholder"><h2>Settings</h2><p>Settings coming soon.</p></div>
           : activeTab === 'project'
           ? <ProjectTab project={project} />
           : (

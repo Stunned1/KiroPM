@@ -258,13 +258,17 @@ nav {
   margin-top: auto;
   padding: 8px;
   border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .account-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   border-radius: 6px;
@@ -879,4 +883,27 @@ nav {
 .content:has(.project-tab) {
   padding: 0;
   overflow: hidden;
+}
+
+/* Settings icon button */
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover,
+.icon-btn.active {
+  background: var(--border);
+  color: var(--text);
 }
