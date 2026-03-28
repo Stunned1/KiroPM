@@ -139,6 +139,36 @@ async function streamOpenAI(event, messages, channelName = 'proposal-chunk') {
   return fullText
 }
 
+// ── Supabase token lookup (server-side) ───────────────────────────────────────
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+async function supabaseAdmin(userId, provider) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { data: null }
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/user_integrations?user_id=eq.${userId}&provider=eq.${provider}&select=access_token`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  )
+  const data = await res.json()
+  return { data }
+}
+
+function extractNotionProp(prop) {
+  if (!prop) return ''
+  switch (prop.type) {
+    case 'title': return prop.title?.map(t => t.plain_text).join('') || ''
+    case 'rich_text': return prop.rich_text?.map(t => t.plain_text).join('') || ''
+    case 'number': return String(prop.number ?? '')
+    case 'select': return prop.select?.name || ''
+    case 'multi_select': return prop.multi_select?.map(s => s.name).join(', ') || ''
+    case 'date': return prop.date?.start || ''
+    case 'checkbox': return prop.checkbox ? 'true' : 'false'
+    case 'url': return prop.url || ''
+    case 'email': return prop.email || ''
+    default: return ''
+  }
+}
+
 app.whenReady().then(() => {
   createWindow()
 
@@ -183,12 +213,19 @@ app.whenReady().then(() => {
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Context files', extensions: ['txt', 'md', 'csv', 'json', 'pdf'] },
+        { name: 'Context files', extensions: ['txt', 'md', 'csv', 'json', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp'] },
       ],
     })
     if (canceled) return []
     return filePaths.map(fp => {
       try {
+        const ext = path.extname(fp).toLowerCase().slice(1)
+        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)
+        if (isImage) {
+          const b64 = fs.readFileSync(fp).toString('base64')
+          const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
+          return { name: path.basename(fp), content: '', imageData: b64, mimeType: mime }
+        }
         return { name: path.basename(fp), content: fs.readFileSync(fp, 'utf8') }
       } catch {
         return { name: path.basename(fp), content: '[Could not read file]' }
@@ -197,10 +234,22 @@ app.whenReady().then(() => {
   })
 
   // ── Agentic chat with OpenAI + filesystem tools ────────────────────────────
-  ipcMain.handle('chat-message', async (event, { message, history, projectPath }) => {
+  ipcMain.handle('chat-message', async (event, { message, history, projectPath, uploadedFiles, userId }) => {
     if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set in .env.local')
 
     const csvContext = loadCSVContext(projectPath)
+
+    // Build uploaded file context
+    let fileContext = ''
+    const imageFiles = []
+    if (uploadedFiles?.length) {
+      const textFiles = uploadedFiles.filter(f => !f.imageData)
+      imageFiles.push(...uploadedFiles.filter(f => f.imageData))
+      if (textFiles.length) {
+        fileContext = '\n\n## UPLOADED CONTEXT FILES\n'
+        fileContext += textFiles.map(f => `\n--- ${f.name} ---\n${(f.content || '').slice(0, 6000)}`).join('')
+      }
+    }
 
     const tools = [
       {
@@ -253,12 +302,39 @@ app.whenReady().then(() => {
           parameters: {
             type: 'object',
             properties: {
-              patch: {
-                type: 'object',
-                description: 'Fields to update on the proposal.',
-              },
+              patch: { type: 'object', description: 'Fields to update on the proposal.' },
             },
             required: ['patch'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'read_google_sheet',
+          description: 'Read data from a Google Sheet. Use this to pull user data, metrics, or feedback from spreadsheets.',
+          parameters: {
+            type: 'object',
+            properties: {
+              spreadsheet_id: { type: 'string', description: 'The Google Sheets spreadsheet ID (from the URL)' },
+              range: { type: 'string', description: 'A1 notation range, e.g. "Sheet1!A1:Z100". Defaults to first sheet if omitted.' },
+            },
+            required: ['spreadsheet_id'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'query_notion_database',
+          description: 'Query a Notion database to retrieve pages/rows. Use this to pull product data, tasks, or feedback from Notion.',
+          parameters: {
+            type: 'object',
+            properties: {
+              database_id: { type: 'string', description: 'The Notion database ID (from the URL or share link)' },
+              filter: { type: 'object', description: 'Optional Notion filter object' },
+            },
+            required: ['database_id'],
           },
         },
       },
@@ -305,6 +381,52 @@ app.whenReady().then(() => {
           event.sender.send('proposal-patch', args.patch)
           return 'Proposal updated successfully'
         }
+        if (name === 'read_google_sheet') {
+          const { data: rows } = await supabaseAdmin(userId, 'google_sheets')
+          if (!rows?.[0]?.access_token) return 'Google Sheets not connected. Ask the user to connect it in their account settings.'
+          const token = rows[0].access_token
+          const range = args.range || ''
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${args.spreadsheet_id}/values/${encodeURIComponent(range || 'A1:Z1000')}`
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+          if (!res.ok) {
+            const err = await res.text()
+            return `Google Sheets error: ${err}`
+          }
+          const json = await res.json()
+          const values = json.values || []
+          // Return as CSV-like text
+          return values.slice(0, 200).map(row => row.join('\t')).join('\n') || 'Sheet is empty'
+        }
+        if (name === 'query_notion_database') {
+          const { data: rows } = await supabaseAdmin(userId, 'notion')
+          if (!rows?.[0]?.access_token) return 'Notion not connected. Ask the user to connect it in their account settings.'
+          const token = rows[0].access_token
+          const body = { page_size: 50 }
+          if (args.filter) body.filter = args.filter
+          const res = await fetch(`https://api.notion.com/v1/databases/${args.database_id}/query`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Notion-Version': '2022-06-28',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          })
+          if (!res.ok) {
+            const err = await res.text()
+            return `Notion error: ${err}`
+          }
+          const json = await res.json()
+          // Flatten pages to readable text
+          const pages = (json.results || []).map(page => {
+            const props = Object.entries(page.properties || {}).map(([key, val]) => {
+              const text = extractNotionProp(val)
+              return `${key}: ${text}`
+            }).join(' | ')
+            return props
+          })
+          return pages.join('\n') || 'No results'
+        }
       } catch (err) {
         return `Error: ${err.message}`
       }
@@ -315,7 +437,7 @@ app.whenReady().then(() => {
       content: `You are Mira, an AI PM assistant using GPT-4o Mini. Use tools to read project files when needed. Be concise. Project root: ${projectPath || 'unknown'}
 
 Available context from product data:
-${csvContext || 'No CSV data loaded'}`
+${csvContext || 'No CSV data loaded'}${fileContext ? `\n\nThe user has uploaded the following files as context — use them to inform your answers:\n${fileContext}` : ''}`
     }
 
     // Build message history
@@ -327,7 +449,19 @@ ${csvContext || 'No CSV data loaded'}`
         content: m.content,
       })
     }
-    messages.push({ role: 'user', content: message })
+    messages.push(imageFiles.length
+      ? {
+          role: 'user',
+          content: [
+            { type: 'text', text: message },
+            ...imageFiles.map(f => ({
+              type: 'image_url',
+              image_url: { url: `data:${f.mimeType};base64,${f.imageData}` }
+            }))
+          ]
+        }
+      : { role: 'user', content: message }
+    )
 
     // Agentic loop — handle multiple rounds of tool calls
     let iterations = 0
@@ -387,8 +521,21 @@ ${csvContext || 'No CSV data loaded'}`
 
     // Build file context from uploaded files
     let fileContext = ''
+    const imageFiles = []
     if (files?.length) {
-      fileContext = files.map(f => `\n\n--- ${f.name} ---\n${f.content.slice(0, 8000)}`).join('')
+      const textFiles = files.filter(f => !f.imageData)
+      imageFiles.push(...files.filter(f => f.imageData))
+      if (textFiles.length) {
+        fileContext = '\n\n## UPLOADED CONTEXT FILES\n'
+        fileContext += textFiles.map(f => {
+          const content = f.content || '[empty or unreadable]'
+          return `\n--- ${f.name} ---\n${content.slice(0, 8000)}`
+        }).join('')
+        console.log(`[generate-proposal] Injecting ${textFiles.length} text file(s):`, textFiles.map(f => f.name))
+      }
+      if (imageFiles.length) {
+        console.log(`[generate-proposal] Injecting ${imageFiles.length} image(s):`, imageFiles.map(f => f.name))
+      }
     }
 
     // Sample codebase for context
@@ -434,7 +581,15 @@ Each task should explain WHY it matters (not just what to do).`
       },
       {
         role: 'user',
-        content: `Request: ${prompt}${fileContext}${codeContext}`
+        content: imageFiles.length
+          ? [
+              { type: 'text', text: `Request: ${prompt}${fileContext ? `\n\nIMPORTANT: The user has uploaded the following files as context. Use them to inform the proposal:\n${fileContext}` : ''}${codeContext}` },
+              ...imageFiles.map(f => ({
+                type: 'image_url',
+                image_url: { url: `data:${f.mimeType};base64,${f.imageData}` }
+              }))
+            ]
+          : `Request: ${prompt}${fileContext ? `\n\nIMPORTANT: The user has uploaded the following files as context. Use them to inform the proposal:\n${fileContext}` : ''}${codeContext}`
       }
     ]
 

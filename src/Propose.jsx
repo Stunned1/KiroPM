@@ -28,7 +28,7 @@ function SchemaChange({ item }) {
   )
 }
 
-function TaskRow({ task, onSendTask }) {
+function TaskRow({ task, onSendTask, onLabelChange }) {
   const [done, setDone] = useState(false)
   const [sent, setSent] = useState(false)
 
@@ -41,7 +41,10 @@ function TaskRow({ task, onSendTask }) {
   return (
     <li className={`task-row ${done ? 'task-done' : ''}`}>
       <input type="checkbox" checked={done} onChange={() => setDone(v => !v)} />
-      <span>{task.label}</span>
+      {onLabelChange
+        ? <EditableText value={task.label} onChange={onLabelChange} />
+        : <span>{task.label}</span>
+      }
       <button
         className={`send-agent-btn ${sent ? 'send-agent-btn--sent' : ''}`}
         onClick={handleSend}
@@ -61,13 +64,12 @@ const SUGGESTIONS = [
   'Fix mobile checkout flow',
 ]
 
-function EmptyState({ onGenerate, compact }) {
+function EmptyState({ onGenerate, compact, uploadedFiles = [], onUploadedFiles }) {
   const [prompt, setPrompt] = useState('')
-  const [uploadedFiles, setUploadedFiles] = useState([])
 
   async function handleUpload() {
     const files = await window.electronFS?.readUpload()
-    if (files?.length) setUploadedFiles(prev => [...prev, ...files])
+    if (files?.length) onUploadedFiles(prev => [...prev, ...files])
   }
 
   function handleKeyDown(e) {
@@ -146,25 +148,94 @@ function EmptyState({ onGenerate, compact }) {
   )
 }
 
+// ── Editable field ────────────────────────────────────────────────────────────
+function EditableText({ value, onChange, multiline, className }) {
+  const [editing, setEditing] = React.useState(false)
+  const [draft, setDraft] = React.useState(value)
+  const ref = React.useRef(null)
+
+  React.useEffect(() => { setDraft(value) }, [value])
+  React.useEffect(() => { if (editing && ref.current) ref.current.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    if (draft !== value) onChange(draft)
+  }
+
+  if (editing) {
+    return multiline
+      ? <textarea ref={ref} className={`editable-input editable-textarea ${className || ''}`} value={draft}
+          onChange={e => setDraft(e.target.value)} onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Escape') { setDraft(value); setEditing(false) } }} />
+      : <input ref={ref} className={`editable-input ${className || ''}`} value={draft}
+          onChange={e => setDraft(e.target.value)} onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }} />
+  }
+
+  return (
+    <span className={`editable-text ${className || ''}`} onClick={() => setEditing(true)} title="Click to edit">
+      {value}
+    </span>
+  )
+}
+
 // ── Proposal view (main area) ─────────────────────────────────────────────────
-function ProposalView({ proposal, onSendTask }) {
+function ProposalView({ proposal, onSendTask, onPatch }) {
   return (
     <div className="proposal-view">
       <div className="proposal-header">
-        <h1 className="proposal-title">{proposal.title}</h1>
-        <p className="proposal-why">{proposal.why}</p>
+        <h1 className="proposal-title">
+          <EditableText value={proposal.title} onChange={v => onPatch({ title: v })} className="proposal-title" />
+        </h1>
+        <p className="proposal-why">
+          <EditableText value={proposal.why} onChange={v => onPatch({ why: v })} multiline className="proposal-why-text" />
+        </p>
       </div>
       <div className="proposal-sections">
         <section className="proposal-section">
           <h3 className="section-title">Supporting signals</h3>
           <div className="signals-grid">
-            {proposal.signals.map((s, i) => <SignalCard key={i} signal={s} />)}
+            {proposal.signals.map((s, i) => (
+              <div key={i} className="signal-card">
+                <span className="signal-source">
+                  <EditableText value={s.source} onChange={v => {
+                    const signals = [...proposal.signals]
+                    signals[i] = { ...signals[i], source: v }
+                    onPatch({ signals })
+                  }} />
+                </span>
+                <p className="signal-quote">
+                  "<EditableText value={s.quote} onChange={v => {
+                    const signals = [...proposal.signals]
+                    signals[i] = { ...signals[i], quote: v }
+                    onPatch({ signals })
+                  }} multiline />"
+                </p>
+              </div>
+            ))}
           </div>
         </section>
         <section className="proposal-section">
           <h3 className="section-title">UI changes</h3>
           <div className="changes-list">
-            {proposal.ui.map((item, i) => <UIChange key={i} item={item} />)}
+            {proposal.ui.map((item, i) => (
+              <div key={i} className="change-item">
+                <span className="change-file">
+                  <EditableText value={item.file} onChange={v => {
+                    const ui = [...proposal.ui]
+                    ui[i] = { ...ui[i], file: v }
+                    onPatch({ ui })
+                  }} />
+                </span>
+                <p className="change-desc">
+                  <EditableText value={item.change} onChange={v => {
+                    const ui = [...proposal.ui]
+                    ui[i] = { ...ui[i], change: v }
+                    onPatch({ ui })
+                  }} multiline />
+                </p>
+              </div>
+            ))}
           </div>
         </section>
         <section className="proposal-section">
@@ -176,7 +247,15 @@ function ProposalView({ proposal, onSendTask }) {
         <section className="proposal-section">
           <h3 className="section-title">Development tasks</h3>
           <ul className="tasks-list">
-            {proposal.tasks.map(task => <TaskRow key={task.id} task={task} onSendTask={onSendTask} />)}
+            {proposal.tasks.map(task => (
+              <TaskRow key={task.id} task={{
+                ...task,
+                label: task.label,
+              }} onSendTask={onSendTask} onLabelChange={v => {
+                const tasks = proposal.tasks.map(t => t.id === task.id ? { ...t, label: v } : t)
+                onPatch({ tasks })
+              }} />
+            ))}
           </ul>
         </section>
       </div>
@@ -185,14 +264,13 @@ function ProposalView({ proposal, onSendTask }) {
 }
 
 // ── Agent sidebar ─────────────────────────────────────────────────────────────
-function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, onProposalPatch }) {
-  const [messages, setMessages] = useState([])
+function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, onProposalPatch, messages, onMessagesChange, initialized, onInitialized, uploadedFiles, userId }) {
   const [toolCalls, setToolCalls] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [streamingReply, setStreamingReply] = useState('')
   const bodyRef = React.useRef(null)
-  const initialSent = React.useRef(false)
+  const initialSent = React.useRef(initialized)
 
   React.useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight
@@ -202,6 +280,7 @@ function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, on
   React.useEffect(() => {
     if (done && !initialSent.current) {
       initialSent.current = true
+      onInitialized()
       // Inject proposal context so the model knows what it just generated
       const proposalContext = proposal
         ? `\n\n[CONTEXT — The following proposal was just generated and is visible to the user]:\nTitle: ${proposal.title}\nRationale: ${proposal.why}\nSignals: ${proposal.signals?.map(s => `${s.source}: ${s.quote}`).join('; ')}\nTasks: ${proposal.tasks?.map(t => t.label).join('; ')}\n[END CONTEXT]\n\nThe user's original request was: ${prompt}\nYou can now answer follow-up questions about this proposal.`
@@ -225,16 +304,18 @@ function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, on
         message: text,
         history,
         projectPath: project?.path,
+        uploadedFiles: uploadedFiles || [],
+        userId,
       })
       // full is the complete text returned by main process
       // streamingReply has the same content streamed chunk by chunk
       // Use whichever is non-empty
       const finalContent = full || ''
       if (finalContent.trim()) {
-        setMessages(prev => [...prev, { role: 'model', content: finalContent }])
+        onMessagesChange(prev => [...prev, { role: 'model', content: finalContent }])
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'model', content: `Error: ${err.message}` }])
+      onMessagesChange(prev => [...prev, { role: 'model', content: `Error: ${err.message}` }])
     } finally {
       setStreamingReply('')
       setToolCalls([])
@@ -246,7 +327,7 @@ function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, on
     if (!text.trim() || sending) return
     const userMsg = { role: 'user', content: text }
     const history = messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', content: m.content }))
-    setMessages(prev => [...prev, userMsg])
+    onMessagesChange(prev => [...prev, userMsg])
     setInput('')
     await runChat(text, history)
   }
@@ -327,12 +408,24 @@ function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, on
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function Propose({ project, onSendTask }) {
-  const [stage, setStage] = useState('idle') // idle | thinking | transitioning | done | error
-  const [submittedPrompt, setSubmittedPrompt] = useState('')
-  const [streamText, setStreamText] = useState('')
-  const [proposal, setProposal] = useState(null)
-  const [error, setError] = useState(null)
+export default function Propose({ project, onSendTask, proposeState, onProposeStateChange, user }) {
+  const stage = proposeState?.stage ?? 'idle'
+  const proposal = proposeState?.proposal ?? null
+  const submittedPrompt = proposeState?.submittedPrompt ?? ''
+  const streamText = proposeState?.streamText ?? ''
+  const error = proposeState?.error ?? null
+
+  function setStage(s) { onProposeStateChange(prev => ({ ...prev, stage: s })) }
+  function setProposal(p) {
+    onProposeStateChange(prev => ({ ...prev, proposal: typeof p === 'function' ? p(prev.proposal) : p }))
+  }
+  function setSubmittedPrompt(v) { onProposeStateChange(prev => ({ ...prev, submittedPrompt: v })) }
+  function setStreamText(v) { onProposeStateChange(prev => ({ ...prev, streamText: typeof v === 'function' ? v(prev.streamText) : v })) }
+  function setError(v) { onProposeStateChange(prev => ({ ...prev, error: v })) }
+  function setChatMessages(v) { onProposeStateChange(prev => ({ ...prev, chatMessages: typeof v === 'function' ? v(prev.chatMessages) : v })) }
+  function setChatInitialized(v) { onProposeStateChange(prev => ({ ...prev, chatInitialized: v })) }
+  function setUploadedFiles(v) { onProposeStateChange(prev => ({ ...prev, uploadedFiles: typeof v === 'function' ? v(prev.uploadedFiles) : v })) }
+  const uploadedFiles = proposeState?.uploadedFiles ?? []
 
   async function handleGenerate(prompt, files) {
     setSubmittedPrompt(prompt)
@@ -368,7 +461,7 @@ export default function Propose({ project, onSendTask }) {
     <div className={`propose-layout ${showSidebar ? 'sidebar-open' : ''}`}>
       <div className="propose-main">
         {stage === 'idle' && (
-          <EmptyState onGenerate={handleGenerate} />
+          <EmptyState onGenerate={handleGenerate} uploadedFiles={uploadedFiles} onUploadedFiles={setUploadedFiles} />
         )}
         {stage === 'thinking' && (
           <div className="thinking-center">
@@ -406,7 +499,7 @@ export default function Propose({ project, onSendTask }) {
         )}
         {stage === 'done' && proposal && (
           <div className="proposal-fadein">
-            <ProposalView proposal={proposal} onSendTask={onSendTask} />
+            <ProposalView proposal={proposal} onSendTask={onSendTask} onPatch={patch => setProposal(prev => prev ? { ...prev, ...patch } : patch)} />
           </div>
         )}
       </div>
@@ -420,6 +513,12 @@ export default function Propose({ project, onSendTask }) {
           onClose={() => setStage('idle')}
           project={project}
           onProposalPatch={(patch) => setProposal(prev => prev ? { ...prev, ...patch } : patch)}
+          messages={proposeState?.chatMessages ?? []}
+          onMessagesChange={setChatMessages}
+          initialized={proposeState?.chatInitialized ?? false}
+          onInitialized={() => setChatInitialized(true)}
+          uploadedFiles={uploadedFiles}
+          userId={user?.id}
         />
       )}
     </div>

@@ -20,6 +20,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
   const [boardTasks, setBoardTasks] = useState({ frontend: [], backend: [], qa: [] })
+  const [proposeState, setProposeState] = useState({ stage: 'idle', proposal: null, submittedPrompt: '', streamText: '', chatMessages: [], chatInitialized: false, uploadedFiles: [] })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -113,7 +114,7 @@ export default function App() {
           : activeTab === 'project'
           ? <ProjectTab project={project} />
           : activeTab === 'propose'
-          ? <Propose project={project} onSendTask={handleSendTask} />
+          ? <Propose project={project} onSendTask={handleSendTask} proposeState={proposeState} onProposeStateChange={setProposeState} user={user} />
           : activeTab === 'tasks'
           ? <TasksTab boardTasks={boardTasks} setBoardTasks={setBoardTasks} />
           : activeTab === 'dashboard'
