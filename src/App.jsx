@@ -21,7 +21,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [project, setProject] = useState(null)
   const [boardTasks, setBoardTasks] = useState({ frontend: [], backend: [], qa: [] })
-  const [proposeState, setProposeState] = useState({ stage: 'idle', proposal: null, submittedPrompt: '', streamText: '', chatMessages: [], chatInitialized: false, uploadedFiles: [] })
+  const [proposeState, setProposeState] = useState({ stage: 'idle', proposal: null, submittedPrompt: '', streamText: '', chatMessages: [], chatInitialized: false, uploadedFiles: [], sentTaskIds: [] })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -60,6 +60,12 @@ export default function App() {
     setBoardTasks(prev => ({
       ...prev,
       [column]: [...prev[column], newTask],
+    }))
+
+    // Track sent task ID so Propose tab preserves the "sent" state
+    setProposeState(prev => ({
+      ...prev,
+      sentTaskIds: [...(prev.sentTaskIds || []), task.id],
     }))
 
     // Auto-switch to Tasks tab

@@ -28,14 +28,12 @@ function SchemaChange({ item }) {
   )
 }
 
-function TaskRow({ task, onSendTask, onLabelChange }) {
+function TaskRow({ task, onSendTask, onLabelChange, isSent }) {
   const [done, setDone] = useState(false)
-  const [sent, setSent] = useState(false)
 
   function handleSend() {
-    if (sent) return
+    if (isSent) return
     onSendTask?.(task)
-    setSent(true)
   }
 
   return (
@@ -46,11 +44,11 @@ function TaskRow({ task, onSendTask, onLabelChange }) {
         : <span>{task.label}</span>
       }
       <button
-        className={`send-agent-btn ${sent ? 'send-agent-btn--sent' : ''}`}
+        className={`send-agent-btn ${isSent ? 'send-agent-btn--sent' : ''}`}
         onClick={handleSend}
-        disabled={sent}
+        disabled={isSent}
       >
-        {sent ? '✓ Sent to Tasks' : 'Send to Tasks →'}
+        {isSent ? '✓ Sent to Tasks' : 'Send to Tasks →'}
       </button>
     </li>
   )
@@ -180,7 +178,7 @@ function EditableText({ value, onChange, multiline, className }) {
 }
 
 // ── Proposal view (main area) ─────────────────────────────────────────────────
-function ProposalView({ proposal, onSendTask, onPatch }) {
+function ProposalView({ proposal, onSendTask, onPatch, sentTaskIds = [] }) {
   return (
     <div className="proposal-view">
       <div className="proposal-header">
@@ -251,7 +249,7 @@ function ProposalView({ proposal, onSendTask, onPatch }) {
               <TaskRow key={task.id} task={{
                 ...task,
                 label: task.label,
-              }} onSendTask={onSendTask} onLabelChange={v => {
+              }} onSendTask={onSendTask} isSent={sentTaskIds.includes(task.id)} onLabelChange={v => {
                 const tasks = proposal.tasks.map(t => t.id === task.id ? { ...t, label: v } : t)
                 onPatch({ tasks })
               }} />
@@ -439,6 +437,7 @@ export default function Propose({ project, onSendTask, proposeState, onProposeSt
   function setChatInitialized(v) { onProposeStateChange(prev => ({ ...prev, chatInitialized: v })) }
   function setUploadedFiles(v) { onProposeStateChange(prev => ({ ...prev, uploadedFiles: typeof v === 'function' ? v(prev.uploadedFiles) : v })) }
   const uploadedFiles = proposeState?.uploadedFiles ?? []
+  const sentTaskIds = proposeState?.sentTaskIds ?? []
 
   async function handleGenerate(prompt, files) {
     setSubmittedPrompt(prompt)
@@ -512,7 +511,7 @@ export default function Propose({ project, onSendTask, proposeState, onProposeSt
         )}
         {stage === 'done' && proposal && (
           <div className="proposal-fadein">
-            <ProposalView proposal={proposal} onSendTask={onSendTask} onPatch={patch => setProposal(prev => prev ? { ...prev, ...patch } : patch)} />
+            <ProposalView proposal={proposal} onSendTask={onSendTask} sentTaskIds={sentTaskIds} onPatch={patch => setProposal(prev => prev ? { ...prev, ...patch } : patch)} />
           </div>
         )}
       </div>
