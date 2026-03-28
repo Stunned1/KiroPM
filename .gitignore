@@ -1,2 +1,16 @@
 node_modules
+.env
+dist
+.DS_Store
+release
 .env.local
+.env.slack
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
+.env.slack.example
