@@ -57,7 +57,10 @@ export default function Auth() {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <span className="logo">◈ Mira</span>
+        <div className="auth-logo-row">
+          <img src="/mira-logo.png" alt="Mira" className="auth-logo-img" />
+          <span className="logo">Mira</span>
+        </div>
         <h2>{isSignUp ? 'Create account' : 'Sign in'}</h2>
         <form onSubmit={handleSubmit}>
           <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />

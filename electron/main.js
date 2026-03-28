@@ -21,10 +21,13 @@ if (process.defaultApp) {
 
 let mainWindow
 
+app.setName('Mira')
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: 'Mira',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       nodeIntegration: false,

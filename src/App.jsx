@@ -74,8 +74,16 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <span className="logo">◈ Mira</span>
-          <button className="back-btn" onClick={() => setProject(null)}>← Projects</button>
+          <div className="sidebar-logo-row">
+            <img src="/mira-logo.png" alt="Mira" className="sidebar-logo-img" />
+            <span className="logo">Mira</span>
+          </div>
+          <button className="back-btn" onClick={() => setProject(null)}>
+            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Projects
+          </button>
         </div>
         <nav>
           {NAV_ITEMS.map((item) => (

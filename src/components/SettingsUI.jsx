@@ -1,46 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { settingsStore } from '../settings/SettingsManager';
-import { supabase } from '../supabase';
 
 export default function SettingsUI() {
   const [activeTab, setActiveTab] = useState('appearance');
   const [settings, setSettings] = useState(settingsStore.get());
-  const [slackConnected, setSlackConnected] = useState(false);
-  const [slackTeam, setSlackTeam] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = settingsStore.subscribe(newSettings => {
       setSettings(newSettings);
     });
-    checkSlackConnection();
     return unsubscribe;
   }, []);
-
-  const checkSlackConnection = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('slack_integrations')
-        .select('team_name')
-        .limit(1)
-        .single();
-      
-      if (data) {
-        setSlackConnected(true);
-        setSlackTeam(data.team_name);
-      }
-    } catch (err) {
-      console.log('Slack not connected');
-    }
-  };
-
-  const connectSlack = () => {
-    const clientId = import.meta.env.VITE_SLACK_CLIENT_ID;
-    const redirectUri = encodeURIComponent('aipm://auth/slack');
-    const scopes = encodeURIComponent('chat:write,channels:read,groups:read,history:read,users:read');
-    const url = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${redirectUri}`;
-    window.electronAI?.openExternal(url);
-  };
 
   const handleChange = (category, key, value) => {
     settingsStore.updateCategory(category, key, value);
@@ -160,76 +130,29 @@ export default function SettingsUI() {
     </div>
   );
 
-  const renderIntegrationsTab = () => (
-    <div className="settings-panel">
-      <h3>Integrations</h3>
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', marginTop: '15px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ width: '40px', height: '40px', background: '#4A154B', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '20px' }}>#</div>
-            <div>
-              <h4 style={{ margin: 0 }}>Slack</h4>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                {slackConnected ? `Connected to ${slackTeam}` : 'Not connected'}
-              </p>
-            </div>
-          </div>
-          <button 
-            onClick={connectSlack}
-            disabled={loading}
-            style={{ 
-              padding: '8px 16px', 
-              background: slackConnected ? 'transparent' : 'var(--accent)', 
-              color: slackConnected ? 'var(--text)' : 'white',
-              border: slackConnected ? '1px solid var(--border)' : 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 500
-            }}
-          >
-            {slackConnected ? 'Reconnect' : 'Connect'}
-          </button>
-        </div>
-        {slackConnected && (
-          <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--border)' }}>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Mira is currently ingesting messages from your public channels to improve project synthesis.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="settings-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '20px', color: 'var(--text)' }}>
-      <h2 style={{ margin: '0 0 20px 0', fontSize: '1.5rem', fontWeight: 600 }}>Settings</h2>
+      <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px' }}>Settings</h2>
       
       <div className="settings-body" style={{ display: 'flex', flexGrow: 1, borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
-        <div className="settings-sidebar" style={{ width: '200px', borderRight: '1px solid var(--border)', paddingRight: '20px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <button 
-            style={{ display: 'block', width: '100%', padding: '10px 15px', textAlign: 'left', background: activeTab === 'appearance' ? 'var(--border)' : 'transparent', border: 'none', color: 'var(--text)', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }} 
-            onClick={() => setActiveTab('appearance')}
-          >Appearance</button>
-          <button 
-            style={{ display: 'block', width: '100%', padding: '10px 15px', textAlign: 'left', background: activeTab === 'editor' ? 'var(--border)' : 'transparent', border: 'none', color: 'var(--text)', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }} 
-            onClick={() => setActiveTab('editor')}
-          >Editor</button>
-          <button 
-            style={{ display: 'block', width: '100%', padding: '10px 15px', textAlign: 'left', background: activeTab === 'fileBrowser' ? 'var(--border)' : 'transparent', border: 'none', color: 'var(--text)', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }} 
-            onClick={() => setActiveTab('fileBrowser')}
-          >File Browser</button>
-          <button 
-            style={{ display: 'block', width: '100%', padding: '10px 15px', textAlign: 'left', background: activeTab === 'integrations' ? 'var(--border)' : 'transparent', border: 'none', color: 'var(--text)', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }} 
-            onClick={() => setActiveTab('integrations')}
-          >Integrations</button>
+        <div className="settings-sidebar" style={{ width: '180px', borderRight: '1px solid var(--border)', paddingRight: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {[
+            { id: 'appearance', label: 'Appearance' },
+            { id: 'editor', label: 'Editor' },
+            { id: 'fileBrowser', label: 'File Browser' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: activeTab === tab.id ? 'rgba(124,106,247,0.12)' : 'transparent', border: 'none', color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-muted)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontFamily: 'inherit', transition: 'background 0.15s, color 0.15s' }}
+              onClick={() => setActiveTab(tab.id)}
+            >{tab.label}</button>
+          ))}
         </div>
         
         <div className="settings-content" style={{ flexGrow: 1, paddingLeft: '40px', overflowY: 'auto' }}>
           {activeTab === 'appearance' && renderAppearanceTab()}
           {activeTab === 'editor' && renderEditorTab()}
           {activeTab === 'fileBrowser' && renderFileBrowserTab()}
-          {activeTab === 'integrations' && renderIntegrationsTab()}
         </div>
       </div>
     </div>

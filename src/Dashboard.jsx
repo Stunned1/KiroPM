@@ -131,7 +131,10 @@ export default function Dashboard({ user, onOpenProject }) {
 
         {view === 'home' && <>
           <div className="dashboard-hero">
-            <span className="dashboard-logo">◈ Mira</span>
+            <div className="dashboard-logo-row">
+              <img src="/mira-logo.png" alt="Mira" className="dashboard-logo-img" />
+              <span className="dashboard-logo">Mira</span>
+            </div>
             <p className="dashboard-greeting">Welcome back, {displayName.split(' ')[0]}</p>
           </div>
 
