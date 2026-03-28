@@ -112,7 +112,7 @@ nav {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: #0f0f0f;
+  background: var(--bg);
 }
 
 .auth-box {
@@ -121,21 +121,22 @@ nav {
   gap: 12px;
   width: 320px;
   padding: 32px;
-  background: #1a1a1a;
-  border-radius: 8px;
-  border: 1px solid #2a2a2a;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
 }
 
 .auth-box .logo {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.3px;
 }
 
 .auth-box h2 {
   margin: 0;
-  font-size: 1rem;
-  color: #aaa;
+  font-size: 13px;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -147,57 +148,68 @@ nav {
 
 .auth-box input {
   padding: 10px 12px;
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
   outline: none;
+  transition: border-color 0.15s;
 }
 
 .auth-box input:focus {
-  border-color: #555;
+  border-color: var(--accent);
 }
 
 .auth-box button[type='submit'] {
   padding: 10px;
-  background: #fff;
-  color: #000;
+  background: var(--accent);
+  color: #fff;
   border: none;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
   font-weight: 500;
+  transition: opacity 0.15s;
+  margin-top: 2px;
+}
+
+.auth-box button[type='submit']:hover {
+  opacity: 0.85;
 }
 
 .auth-box button[type='submit']:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .auth-toggle {
   background: none;
   border: none;
-  color: #666;
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
   padding: 0;
+  transition: color 0.15s;
 }
 
 .auth-toggle:hover {
-  color: #aaa;
+  color: var(--text);
 }
 
 .auth-error {
   color: #f87171;
-  font-size: 0.8rem;
+  font-size: 12px;
   margin: 0;
 }
 
 .auth-message {
   color: #4ade80;
-  font-size: 0.8rem;
+  font-size: 12px;
   margin: 0;
 }
 
@@ -208,22 +220,24 @@ nav {
 .signout-btn {
   background: none;
   border: none;
-  color: #555;
-  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: inherit;
   cursor: pointer;
   padding: 0;
+  transition: color 0.15s;
 }
 
 .signout-btn:hover {
-  color: #aaa;
+  color: var(--text);
 }
 
 .auth-divider {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #444;
-  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .auth-divider::before,
@@ -231,7 +245,7 @@ nav {
   content: '';
   flex: 1;
   height: 1px;
-  background: #2a2a2a;
+  background: var(--border);
 }
 
 .github-btn {
@@ -241,17 +255,19 @@ nav {
   gap: 8px;
   padding: 10px;
   background: #161b22;
-  color: #fff;
+  color: #e6edf3;
   border: 1px solid #30363d;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
   font-weight: 500;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .github-btn:hover {
   background: #21262d;
+  border-color: #444c56;
 }
 
 .google-btn {
@@ -263,8 +279,9 @@ nav {
   background: #fff;
   color: #3c4043;
   border: 1px solid #dadce0;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
   font-weight: 500;
   transition: background 0.15s;
@@ -644,8 +661,8 @@ nav {
 }
 
 .dash-card:hover {
-  border-color: #444;
-  background: #222;
+  border-color: rgba(124,106,247,0.3);
+  background: rgba(124,106,247,0.04);
 }
 
 .clone-card {
@@ -959,7 +976,7 @@ nav {
 .project-tree {
   width: 220px;
   flex-shrink: 0;
-  background: #141414;
+  background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1021,7 +1038,7 @@ nav {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #1e1e1e;
+  background: var(--bg);
 }
 
 .editor-topbar {
@@ -1030,7 +1047,7 @@ nav {
   justify-content: space-between;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
-  background: #1e1e1e;
+  background: var(--surface);
   flex-shrink: 0;
 }
 
@@ -1102,8 +1119,8 @@ nav {
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: radial-gradient(ellipse at 60% 20%, rgba(120, 80, 20, 0.18) 0%, transparent 60%),
-              radial-gradient(ellipse at 20% 80%, rgba(80, 40, 120, 0.12) 0%, transparent 50%);
+  background: radial-gradient(ellipse at 60% 10%, rgba(124, 106, 247, 0.12) 0%, transparent 60%),
+              radial-gradient(ellipse at 20% 80%, rgba(100, 60, 180, 0.08) 0%, transparent 50%);
 }
 
 .propose-empty-inner {
@@ -1125,7 +1142,7 @@ nav {
 }
 
 .greeting-name {
-  background: linear-gradient(90deg, #f59e0b, #a855f7);
+  background: linear-gradient(90deg, #a78bfa, #7c6af7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1138,16 +1155,16 @@ nav {
 
 /* Main input box */
 .propose-box {
-  background: #1c1c1c;
-  border: 1px solid #333;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.15s;
 }
 
 .propose-box:focus-within {
-  border-color: #f59e0b66;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.06);
+  border-color: rgba(124, 106, 247, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 106, 247, 0.06);
 }
 
 .propose-textarea {
@@ -1163,14 +1180,14 @@ nav {
   line-height: 1.6;
 }
 
-.propose-textarea::placeholder { color: #555; }
+.propose-textarea::placeholder { color: var(--text-muted); opacity: 0.6; }
 
 .propose-box-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--border);
 }
 
 .suggestion-chips {
@@ -1181,18 +1198,19 @@ nav {
 
 .suggestion-chip {
   background: none;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 20px;
   color: var(--text-muted);
   font-size: 11px;
+  font-family: inherit;
   padding: 4px 10px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
 
 .suggestion-chip:hover {
-  border-color: #555;
-  color: var(--text);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .propose-submit-btn {
@@ -1220,8 +1238,8 @@ nav {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #1c1c1c;
-  border: 1px solid #333;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
 }
@@ -1244,17 +1262,18 @@ nav {
   align-items: center;
   gap: 5px;
   background: none;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 20px;
   color: var(--text-muted);
   font-size: 11px;
+  font-family: inherit;
   padding: 4px 10px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 .source-chip:hover {
-  border-color: #555;
+  border-color: #444;
   color: var(--text);
 }
 
@@ -1410,6 +1429,7 @@ nav {
   min-height: 60px;
   line-height: 1.5;
 }
+.source-sheet-input {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1462,7 +1482,7 @@ nav {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #111;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 14px;
@@ -1514,12 +1534,21 @@ nav {
   border: none;
   color: var(--text-muted);
   font-size: 11px;
+  font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
   padding: 0;
+  transition: color 0.15s;
 }
 
 .send-agent-btn:hover { color: var(--accent); }
+
+.send-agent-btn--sent {
+  color: #22c55e;
+  cursor: default;
+}
+
+.send-agent-btn--sent:hover { color: #22c55e; }
 
 /* ── Propose layout with sliding sidebar ── */
 .propose-layout {
@@ -1550,7 +1579,7 @@ nav {
   width: 0;
   flex-shrink: 0;
   overflow: hidden;
-  background: #141414;
+  background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1805,8 +1834,8 @@ nav {
 }
 
 .task-card:hover {
-  border-color: #3a3a3a;
-  background: #1f1f1f;
+  border-color: rgba(124,106,247,0.2);
+  background: rgba(124,106,247,0.02);
 }
 
 .task-card-header {
@@ -1961,7 +1990,7 @@ nav {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #111;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 12px;
@@ -2614,8 +2643,8 @@ nav {
 }
 
 .modal {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: 440px;
   max-height: 80vh;
@@ -2685,17 +2714,18 @@ nav {
 .modal-field input,
 .modal-field select {
   padding: 8px 10px;
-  background: #111;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
   font-size: 13px;
+  font-family: inherit;
   outline: none;
 }
 
 .modal-field input:focus,
 .modal-field select:focus {
-  border-color: #555;
+  border-color: var(--accent);
 }
 
 .modal-task-list {
@@ -2717,7 +2747,7 @@ nav {
   align-items: baseline;
   gap: 10px;
   padding: 7px 0;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-task-row:last-child {
@@ -2833,14 +2863,9 @@ nav {
   color: var(--text-muted);
 }
 
-.modal-field input,
-.modal-field select {
-  font-family: inherit;
-}
-
 .stream-preview {
   font-size: 11px;
-  color: #555;
+  color: var(--text-muted);
   font-family: var(--font-mono);
   max-width: 480px;
   word-break: break-all;
