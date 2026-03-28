@@ -1918,6 +1918,23 @@ nav {
 
 .agent-input:focus { border-color: var(--accent); }
 
+.agent-upload-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+.agent-upload-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.agent-upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* Thinking centered on main screen */
 .thinking-center {
   display: flex;

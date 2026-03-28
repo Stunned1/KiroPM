@@ -65,8 +65,8 @@ function loadCSVContext(projectPath) {
 }
 
 // ── OpenAI API helper ─────────────────────────────────────────────────────────
-async function callOpenAI({ messages, stream = false, tools = null, temperature = 0.7 }) {
-  const body = { model: 'gpt-4o-mini', messages, temperature }
+async function callOpenAI({ messages, stream = false, tools = null, temperature = 0.7, vision = false }) {
+  const body = { model: vision ? 'gpt-4o' : 'gpt-4o-mini', messages, temperature }
   if (tools) body.tools = tools
   if (stream) body.stream = true
 
@@ -83,8 +83,8 @@ async function callOpenAI({ messages, stream = false, tools = null, temperature 
 }
 
 // ── Stream OpenAI response and emit chunks ────────────────────────────────────
-async function streamOpenAI(event, messages, channelName = 'proposal-chunk') {
-  const response = await callOpenAI({ messages, stream: true })
+async function streamOpenAI(event, messages, channelName = 'proposal-chunk', vision = false) {
+  const response = await callOpenAI({ messages, stream: true, vision })
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let fullText = ''
@@ -266,7 +266,7 @@ app.whenReady().then(() => {
     let fullText = ''
 
     while (iterations++ < 10) {
-      const response = await callOpenAI({ messages, tools })
+      const response = await callOpenAI({ messages, tools, vision: imageFiles.length > 0 })
       const choice = response.choices?.[0]
       if (!choice) break
       const assistantMsg = choice.message
@@ -339,7 +339,7 @@ app.whenReady().then(() => {
       },
     ]
 
-    const fullText = await streamOpenAI(event, messages, 'proposal-chunk')
+    const fullText = await streamOpenAI(event, messages, 'proposal-chunk', imageFiles.length > 0)
     event.sender.send('proposal-done', fullText)
     return fullText
   })

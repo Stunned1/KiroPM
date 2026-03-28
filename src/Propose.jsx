@@ -264,7 +264,7 @@ function ProposalView({ proposal, onSendTask, onPatch }) {
 }
 
 // ── Agent sidebar ─────────────────────────────────────────────────────────────
-function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, onProposalPatch, messages, onMessagesChange, initialized, onInitialized, uploadedFiles, userId }) {
+function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, onProposalPatch, messages, onMessagesChange, initialized, onInitialized, uploadedFiles, userId, onUploadedFiles }) {
   const [toolCalls, setToolCalls] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -385,6 +385,19 @@ function AgentSidebar({ prompt, proposal, streamText, done, onClose, project, on
       </div>
 
       <div className="agent-input-row">
+        <button
+          className="agent-upload-btn"
+          onClick={async () => {
+            const files = await window.electronFS?.readUpload()
+            if (files?.length) onUploadedFiles(prev => [...prev, ...files])
+          }}
+          title="Add files"
+          disabled={sending}
+        >
+          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+        </button>
         <input
           className="agent-input"
           placeholder="Ask a follow-up…"
@@ -519,6 +532,7 @@ export default function Propose({ project, onSendTask, proposeState, onProposeSt
           onInitialized={() => setChatInitialized(true)}
           uploadedFiles={uploadedFiles}
           userId={user?.id}
+          onUploadedFiles={setUploadedFiles}
         />
       )}
     </div>
