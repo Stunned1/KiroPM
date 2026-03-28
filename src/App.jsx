@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import Auth from './Auth'
+import Account from './Account'
 
 const NAV_ITEMS = [
   { id: 'signals', label: 'Signals' },
@@ -24,12 +25,15 @@ export default function App() {
 
   if (!session) return <Auth />
 
+  const user = session.user
+  const avatarUrl = user.user_metadata?.avatar_url
+  const displayName = user.user_metadata?.full_name || user.user_metadata?.user_name || user.email
+
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
           <span className="logo">◈ AI PM</span>
-          <button className="signout-btn" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
         <nav>
           {NAV_ITEMS.map((item) => (
@@ -42,13 +46,30 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <button
+            className={`account-btn ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            {avatarUrl
+              ? <img src={avatarUrl} alt="avatar" className="avatar" />
+              : <div className="avatar-placeholder">{displayName?.[0]?.toUpperCase()}</div>
+            }
+            <span className="account-name">{displayName}</span>
+          </button>
+        </div>
       </aside>
 
       <main className="content">
-        <div className="placeholder">
-          <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>
-          <p>This section is ready to be built out.</p>
-        </div>
+        {activeTab === 'account'
+          ? <Account user={user} />
+          : (
+            <div className="placeholder">
+              <h2>{NAV_ITEMS.find((i) => i.id === activeTab)?.label}</h2>
+              <p>This section is ready to be built out.</p>
+            </div>
+          )
+        }
       </main>
     </div>
   )

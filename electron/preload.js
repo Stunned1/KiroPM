@@ -1,8 +1,11 @@
-const { contextBridge } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
 
-// Expose safe APIs to renderer here as the app grows
-// e.g. contextBridge.exposeInMainWorld('api', { ... })
 contextBridge.exposeInMainWorld('versions', {
   node: () => process.versions.node,
   electron: () => process.versions.electron,
+})
+
+contextBridge.exposeInMainWorld('electronAuth', {
+  onOAuthCallback: (callback) => ipcRenderer.on('oauth-callback', (_event, url) => callback(url)),
+  removeOAuthCallback: () => ipcRenderer.removeAllListeners('oauth-callback'),
 })
