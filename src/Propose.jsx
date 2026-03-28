@@ -66,25 +66,10 @@ const SUGGESTIONS = [
 
 function EmptyState({ onGenerate, compact, uploadedFiles = [], onUploadedFiles }) {
   const [prompt, setPrompt] = useState('')
-  const [sheetUrl, setSheetUrl] = useState('')
-  const [showSheetInput, setShowSheetInput] = useState(false)
 
   async function handleUpload() {
     const files = await window.electronFS?.readUpload()
     if (files?.length) onUploadedFiles(prev => [...prev, ...files])
-  }
-
-  function extractSheetId(url) {
-    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-    return match ? match[1] : url.trim()
-  }
-
-  function addSheet() {
-    if (!sheetUrl.trim()) return
-    const id = extractSheetId(sheetUrl)
-    onUploadedFiles(prev => [...prev, { name: `Google Sheet (${id.slice(0, 8)}…)`, sheetId: id }])
-    setSheetUrl('')
-    setShowSheetInput(false)
   }
 
   function handleKeyDown(e) {
@@ -146,9 +131,7 @@ function EmptyState({ onGenerate, compact, uploadedFiles = [], onUploadedFiles }
             <span className="sources-label">Add context</span>
             <div className="sources-list">
               {uploadedFiles.map((f, i) => (
-                <span key={i} className="source-chip active">
-                  {f.sheetId ? '📊' : '📄'} {f.name}
-                </span>
+                <span key={i} className="source-chip active">📄 {f.name}</span>
               ))}
               <button className="source-chip source-upload" onClick={handleUpload}>
                 <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -156,23 +139,6 @@ function EmptyState({ onGenerate, compact, uploadedFiles = [], onUploadedFiles }
                 </svg>
                 Upload file
               </button>
-              {showSheetInput ? (
-                <span className="source-chip source-sheet-input">
-                  <input
-                    autoFocus
-                    className="sheet-url-input"
-                    placeholder="Paste Google Sheet URL…"
-                    value={sheetUrl}
-                    onChange={e => setSheetUrl(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') addSheet(); if (e.key === 'Escape') setShowSheetInput(false) }}
-                  />
-                  <button onClick={addSheet}>Add</button>
-                </span>
-              ) : (
-                <button className="source-chip source-upload" onClick={() => setShowSheetInput(true)}>
-                  📊 Add Sheet
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -475,7 +441,6 @@ export default function Propose({ project, onSendTask, proposeState, onProposeSt
         prompt,
         files,
         projectPath: project?.path,
-        userId: user?.id,
       })
 
       const jsonMatch = fullText?.match(/\{[\s\S]*\}/)
