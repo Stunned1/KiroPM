@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
 const path = require('path')
 
 const isDev = process.env.NODE_ENV !== 'production'
@@ -41,7 +41,16 @@ function handleOAuthCallback(url) {
   }
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+
+  ipcMain.handle('open-folder-dialog', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+    })
+    return canceled ? null : filePaths[0]
+  })
+})
 
 // macOS: handle protocol via open-url event
 app.on('open-url', (event, url) => {

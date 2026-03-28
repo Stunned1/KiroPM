@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import Auth from './Auth'
 import Account from './Account'
+import Dashboard from './Dashboard'
 
 const NAV_ITEMS = [
   { id: 'signals', label: 'Signals' },
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('signals')
   const [session, setSession] = useState(null)
+  const [project, setProject] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -24,6 +26,7 @@ export default function App() {
   }, [])
 
   if (!session) return <Auth />
+  if (!project) return <Dashboard user={session.user} onOpenProject={setProject} />
 
   const user = session.user
   const avatarUrl = user.user_metadata?.avatar_url
@@ -34,6 +37,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <span className="logo">◈ AI PM</span>
+          <button className="back-btn" onClick={() => setProject(null)}>← Projects</button>
         </div>
         <nav>
           {NAV_ITEMS.map((item) => (

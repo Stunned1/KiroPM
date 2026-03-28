@@ -9,3 +9,7 @@ contextBridge.exposeInMainWorld('electronAuth', {
   onOAuthCallback: (callback) => ipcRenderer.on('oauth-callback', (_event, url) => callback(url)),
   removeOAuthCallback: () => ipcRenderer.removeAllListeners('oauth-callback'),
 })
+
+contextBridge.exposeInMainWorld('electronFS', {
+  openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
+})
