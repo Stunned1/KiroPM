@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "com.yourco.ai-pm-tool",
-    "productName": "AI PM Tool",
+    "productName": "Mira",
     "files": [
       "dist/**/*",
       "electron/**/*"

@@ -60,7 +60,7 @@ export default function Auth() {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <span className="logo">◈ AI PM</span>
+        <span className="logo">◈ Mira</span>
         <h2>{isSignUp ? 'Create account' : 'Sign in'}</h2>
         <form onSubmit={handleSubmit}>
           <input

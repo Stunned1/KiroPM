@@ -36,7 +36,7 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <span className="logo">◈ AI PM</span>
+          <span className="logo">◈ Mira</span>
           <button className="back-btn" onClick={() => setProject(null)}>← Projects</button>
         </div>
         <nav>

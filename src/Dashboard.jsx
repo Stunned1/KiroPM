@@ -131,7 +131,7 @@ export default function Dashboard({ user, onOpenProject }) {
 
         {view === 'home' && <>
           <div className="dashboard-hero">
-            <span className="dashboard-logo">◈ AI PM</span>
+            <span className="dashboard-logo">◈ Mira</span>
             <p className="dashboard-greeting">Welcome back, {displayName.split(' ')[0]}</p>
           </div>
 
