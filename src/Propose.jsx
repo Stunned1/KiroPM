@@ -1,31 +1,4 @@
-import React, { useState, useEffect } from 'react'
-
-// ── Static mock data ──────────────────────────────────────────────────────────
-const MOCK_PROPOSAL = {
-  title: 'Onboarding checklist for new users',
-  why: 'Across 6 customer interviews, new users consistently reported feeling lost after signup. Usage data shows a 62% drop-off within the first session. An interactive onboarding checklist would guide users to their first "aha moment" faster.',
-  signals: [
-    { source: 'Interview – Sarah K.', quote: '"I signed up and had no idea what to do first."' },
-    { source: 'Interview – Marcus T.', quote: '"The empty state was confusing. I almost churned day one."' },
-    { source: 'Usage data', quote: '62% of new users never complete a second session.' },
-    { source: 'Support ticket #1042', quote: '"How do I get started? The docs aren\'t helping."' },
-  ],
-  ui: [
-    { file: 'src/App.jsx', change: 'Add an <OnboardingChecklist /> component that renders on first login until all steps are complete.' },
-    { file: 'src/Dashboard.jsx', change: 'Show a progress bar at the top of the dashboard reflecting checklist completion %.' },
-  ],
-  schema: [
-    { sql: 'ALTER TABLE users ADD COLUMN onboarding_completed_at TIMESTAMPTZ;' },
-    { sql: 'ALTER TABLE users ADD COLUMN onboarding_step INTEGER DEFAULT 0;' },
-  ],
-  tasks: [
-    { id: 1, label: 'Create OnboardingChecklist component with 5 steps' },
-    { id: 2, label: 'Add onboarding_step and onboarding_completed_at columns to users table' },
-    { id: 3, label: 'Wire checklist state to Supabase — persist step progress' },
-    { id: 4, label: 'Add progress bar to Dashboard header' },
-    { id: 5, label: 'Dismiss checklist once all steps complete' },
-  ],
-}
+import React, { useState } from 'react'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 function SignalCard({ signal }) {
@@ -74,27 +47,19 @@ const SUGGESTIONS = [
   'Fix mobile checkout flow',
 ]
 
-const SOURCES = [
-  { label: 'Customer interviews', icon: '🎙️' },
-  { label: 'Usage analytics', icon: '📊' },
-  { label: 'Support tickets', icon: '🎫' },
-  { label: 'NPS responses', icon: '⭐' },
-]
-
 function EmptyState({ onGenerate, compact }) {
   const [prompt, setPrompt] = useState('')
-  const [attachedSources, setAttachedSources] = useState([])
+  const [uploadedFiles, setUploadedFiles] = useState([])
 
-  function toggleSource(label) {
-    setAttachedSources(prev =>
-      prev.includes(label) ? prev.filter(s => s !== label) : [...prev, label]
-    )
+  async function handleUpload() {
+    const files = await window.electronFS?.readUpload()
+    if (files?.length) setUploadedFiles(prev => [...prev, ...files])
   }
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey && prompt.trim()) {
       e.preventDefault()
-      onGenerate(prompt)
+      onGenerate(prompt, uploadedFiles)
     }
   }
 
@@ -135,7 +100,7 @@ function EmptyState({ onGenerate, compact }) {
             )}
             <button
               className="propose-submit-btn"
-              onClick={() => onGenerate(prompt)}
+              onClick={() => onGenerate(prompt, uploadedFiles)}
               disabled={!prompt.trim()}
             >
               <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -149,17 +114,10 @@ function EmptyState({ onGenerate, compact }) {
           <div className="sources-bar">
             <span className="sources-label">Add context</span>
             <div className="sources-list">
-              {SOURCES.map(s => (
-                <button
-                  key={s.label}
-                  className={`source-chip ${attachedSources.includes(s.label) ? 'active' : ''}`}
-                  onClick={() => toggleSource(s.label)}
-                >
-                  <span>{s.icon}</span>
-                  {s.label}
-                </button>
+              {uploadedFiles.map(f => (
+                <span key={f.name} className="source-chip active">📄 {f.name}</span>
               ))}
-              <button className="source-chip source-upload">
+              <button className="source-chip source-upload" onClick={handleUpload}>
                 <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -169,63 +127,6 @@ function EmptyState({ onGenerate, compact }) {
           </div>
         )}
 
-      </div>
-    </div>
-  )
-}
-
-// ── Thinking stream ───────────────────────────────────────────────────────────
-const THINKING_STEPS = [
-  { delay: 0,    text: 'Reading codebase…' },
-  { delay: 900,  text: 'Scanning customer signals…' },
-  { delay: 1800, text: 'Analyzing usage patterns…' },
-  { delay: 2700, text: 'Generating proposal…' },
-]
-
-function ThinkingStream({ done, steps, visibleCount }) {
-  return (
-    <div className="thinking-stream">
-      {steps.slice(0, visibleCount).map((step, i) => (
-        <div
-          key={i}
-          className={`thinking-step ${i === visibleCount - 1 && !done ? 'thinking-active' : 'thinking-done'}`}
-        >
-          {i === visibleCount - 1 && !done
-            ? <span className="thinking-spinner" />
-            : <span className="thinking-check">✓</span>
-          }
-          {step.text}
-        </div>
-      ))}
-      {done && (
-        <div className="thinking-step thinking-done">
-          <span className="thinking-check">✓</span>
-          Proposal ready
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Agent sidebar ─────────────────────────────────────────────────────────────
-function AgentSidebar({ prompt, steps, onClose }) {
-  return (
-    <div className="agent-sidebar">
-      <div className="agent-header">
-        <span className="agent-title">Mira</span>
-        <button className="agent-close" onClick={onClose}>✕</button>
-      </div>
-      <div className="agent-body">
-        <div className="agent-user-msg">{prompt}</div>
-        <ThinkingStream done steps={steps} visibleCount={steps.length} />
-      </div>
-      <div className="agent-input-row">
-        <input className="agent-input" placeholder="Ask a follow-up…" />
-        <button className="propose-submit-btn">
-          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </button>
       </div>
     </div>
   )
@@ -269,33 +170,181 @@ function ProposalView({ proposal }) {
   )
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-// stages: 'idle' | 'thinking' | 'transitioning' | 'done'
-export default function Propose() {
-  const [stage, setStage] = useState('idle')
-  const [submittedPrompt, setSubmittedPrompt] = useState('')
-  const [visibleCount, setVisibleCount] = useState(0)
+// ── Agent sidebar ─────────────────────────────────────────────────────────────
+function AgentSidebar({ prompt, streamText, done, onClose, project, onProposalPatch }) {
+  const [messages, setMessages] = useState([])
+  const [toolCalls, setToolCalls] = useState([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [streamingReply, setStreamingReply] = useState('')
+  const bodyRef = React.useRef(null)
+  const initialSent = React.useRef(false)
 
-  function handleGenerate(p) {
-    setSubmittedPrompt(p)
-    setVisibleCount(0)
+  React.useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight
+  }, [messages, streamingReply, toolCalls])
+
+  // Auto-send initial prompt as chat once proposal is done
+  React.useEffect(() => {
+    if (done && !initialSent.current) {
+      initialSent.current = true
+      runChat(prompt, [])
+    }
+  }, [done])
+
+  async function runChat(text, history) {
+    setSending(true)
+    setStreamingReply('')
+    setToolCalls([])
+
+    window.electronAI?.removeChatListeners()
+    window.electronAI?.onChatChunk(chunk => setStreamingReply(prev => prev + chunk))
+    window.electronAI?.onChatToolCall(tool => setToolCalls(prev => [...prev, tool]))
+    window.electronAI?.onProposalPatch(patch => onProposalPatch?.(patch))
+
+    try {
+      const full = await window.electronAI?.sendChat({
+        message: text,
+        history,
+        projectPath: project?.path,
+      })
+      // full is the complete text returned by main process
+      // streamingReply has the same content streamed chunk by chunk
+      // Use whichever is non-empty
+      const finalContent = full || ''
+      if (finalContent.trim()) {
+        setMessages(prev => [...prev, { role: 'model', content: finalContent }])
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'model', content: `Error: ${err.message}` }])
+    } finally {
+      setStreamingReply('')
+      setToolCalls([])
+      setSending(false)
+    }
+  }
+
+  async function sendMessage(text) {
+    if (!text.trim() || sending) return
+    const userMsg = { role: 'user', content: text }
+    const history = messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', content: m.content }))
+    setMessages(prev => [...prev, userMsg])
+    setInput('')
+    await runChat(text, history)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
+    }
+  }
+
+  const TOOL_LABELS = {
+    read_file: '📄 Reading',
+    list_directory: '📁 Listing',
+    search_files: '🔍 Searching',
+  }
+
+  return (
+    <div className="agent-sidebar">
+      <div className="agent-header">
+        <span className="agent-title">Mira</span>
+        <button className="agent-close" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="agent-body" ref={bodyRef}>
+        <div className="thinking-stream">
+          <div className={`thinking-step ${done ? 'thinking-done' : 'thinking-active'}`}>
+            {done ? <span className="thinking-check">✓</span> : <span className="thinking-spinner" />}
+            {done ? 'Proposal generated' : 'Analyzing with Gemini 2.5 Flash…'}
+          </div>
+          {!done && streamText && <div className="stream-preview">{streamText.slice(-200)}</div>}
+        </div>
+
+        {messages.map((msg, i) => (
+          <div key={i} className={msg.role === 'user' ? 'agent-user-msg' : 'agent-model-msg'}>
+            {msg.content}
+          </div>
+        ))}
+
+        {toolCalls.map((tool, i) => (
+          <div key={i} className="agent-tool-call">
+            <span className="thinking-spinner" />
+            {TOOL_LABELS[tool.name] || tool.name}
+            <span className="tool-arg">
+              {tool.args?.file_path || tool.args?.dir_path || tool.args?.pattern || ''}
+            </span>
+          </div>
+        ))}
+
+        {streamingReply && (
+          <div className="agent-model-msg agent-model-streaming">
+            {streamingReply}<span className="streaming-cursor" />
+          </div>
+        )}
+      </div>
+
+      <div className="agent-input-row">
+        <input
+          className="agent-input"
+          placeholder="Ask a follow-up…"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={sending}
+        />
+        <button
+          className="propose-submit-btn"
+          onClick={() => sendMessage(input)}
+          disabled={sending || !input.trim()}
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+export default function Propose({ project }) {
+  const [stage, setStage] = useState('idle') // idle | thinking | transitioning | done | error
+  const [submittedPrompt, setSubmittedPrompt] = useState('')
+  const [streamText, setStreamText] = useState('')
+  const [proposal, setProposal] = useState(null)
+  const [error, setError] = useState(null)
+
+  async function handleGenerate(prompt, files) {
+    setSubmittedPrompt(prompt)
+    setStreamText('')
+    setError(null)
     setStage('thinking')
 
-    // Reveal steps one by one
-    THINKING_STEPS.forEach(({ delay }, i) => {
-      setTimeout(() => setVisibleCount(i + 1), delay)
-    })
+    window.electronAI?.removeListeners()
+    window.electronAI?.onChunk(chunk => setStreamText(prev => prev + chunk))
 
-    // When last step done, start transition
-    const lastDelay = THINKING_STEPS[THINKING_STEPS.length - 1].delay + 800
-    setTimeout(() => setStage('transitioning'), lastDelay)
+    try {
+      const fullText = await window.electronAI?.generateProposal({
+        prompt,
+        files,
+        projectPath: project?.path,
+      })
 
-    // After transition animation, show proposal
-    setTimeout(() => setStage('done'), lastDelay + 400)
+      const jsonMatch = fullText?.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('Could not parse proposal — try again')
+      const parsed = JSON.parse(jsonMatch[0])
+      setProposal(parsed)
+      setStage('transitioning')
+      setTimeout(() => setStage('done'), 400)
+    } catch (err) {
+      setError(err.message)
+      setStage('error')
+    }
   }
 
   const showSidebar = stage === 'transitioning' || stage === 'done'
-  const showProposal = stage === 'done'
 
   return (
     <div className={`propose-layout ${showSidebar ? 'sidebar-open' : ''}`}>
@@ -306,22 +355,40 @@ export default function Propose() {
         {stage === 'thinking' && (
           <div className="thinking-center">
             <div className="thinking-center-prompt">{submittedPrompt}</div>
-            <ThinkingStream
-              done={false}
-              steps={THINKING_STEPS}
-              visibleCount={visibleCount}
-            />
+            <div className="thinking-stream">
+              <div className="thinking-step thinking-active">
+                <span className="thinking-spinner" />
+                Analyzing with Gemini 2.5 Flash…
+              </div>
+              {streamText && (
+                <div className="stream-preview">{streamText.slice(-200)}</div>
+              )}
+            </div>
           </div>
         )}
         {stage === 'transitioning' && (
           <div className="thinking-center thinking-exit">
             <div className="thinking-center-prompt">{submittedPrompt}</div>
-            <ThinkingStream done steps={THINKING_STEPS} visibleCount={THINKING_STEPS.length} />
+            <div className="thinking-stream">
+              <div className="thinking-step thinking-done">
+                <span className="thinking-check">✓</span>
+                Proposal ready
+              </div>
+            </div>
           </div>
         )}
-        {showProposal && (
+        {stage === 'error' && (
+          <div className="thinking-center">
+            <div className="thinking-center-prompt">{submittedPrompt}</div>
+            <p style={{ color: '#f87171', fontSize: 13, marginTop: 8 }}>{error}</p>
+            <button className="propose-btn" style={{ marginTop: 12 }} onClick={() => setStage('idle')}>
+              Try again
+            </button>
+          </div>
+        )}
+        {stage === 'done' && proposal && (
           <div className="proposal-fadein">
-            <ProposalView proposal={MOCK_PROPOSAL} />
+            <ProposalView proposal={proposal} />
           </div>
         )}
       </div>
@@ -329,8 +396,11 @@ export default function Propose() {
       {showSidebar && (
         <AgentSidebar
           prompt={submittedPrompt}
-          steps={THINKING_STEPS}
+          streamText={streamText}
+          done={stage === 'done'}
           onClose={() => setStage('idle')}
+          project={project}
+          onProposalPatch={(patch) => setProposal(prev => prev ? { ...prev, ...patch } : patch)}
         />
       )}
     </div>

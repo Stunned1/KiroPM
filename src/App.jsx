@@ -83,7 +83,7 @@ export default function App() {
           : activeTab === 'project'
           ? <ProjectTab project={project} />
           : activeTab === 'propose'
-          ? <Propose />
+          ? <Propose project={project} />
           : activeTab === 'tasks'
           ? <TasksTab />
           : (
